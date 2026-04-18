@@ -1,0 +1,30 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE=\"$TOOL_INPUT_FILE_PATH\"; if [[ \"$FILE\" == *.py ]]; then cd /Users/jungi/Desktop/bokjidream/rag && .venv/bin/ruff format \"$FILE\" && .venv/bin/ruff check --fix \"$FILE\"; fi"
+          },
+          {
+            "type": "command",
+            "command": "FILE=\"$TOOL_INPUT_FILE_PATH\"; if [[ \"$FILE\" == *.py ]]; then cd /Users/jungi/Desktop/bokjidream/rag && .venv/bin/mypy \"$FILE\" --ignore-missing-imports 2>&1 | head -20; fi"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /Users/jungi/Desktop/bokjidream/rag && .venv/bin/pytest --cov=src --cov-fail-under=80 -q 2>&1 | tail -10"
+          }
+        ]
+      }
+    ]
+  }
+}
