@@ -88,8 +88,27 @@ Playwright 크롤링
 - `src/retriever/` : FastAPI TestClient + ChromaDB in-memory 컬렉션으로 통합 테스트
 - 커버리지 80% 이상 유지
 
+## Sprint Contract
+
+작업 시작 전 완료 기준을 합의한다:
+- **완료 기준**: 테스트 통과 + 커버리지 80% + ruff/mypy 오류 없음
+- 모호한 요청은 먼저 질문해서 명확히 한 뒤 시작
+
+## 참고 문서 (docs/)
+
+- 코드 작성 시 → [docs/conventions.md](docs/conventions.md)
+- API 응답 설계 시 → [docs/api-contract.md](docs/api-contract.md)
+- 아키텍처 파악 시 → [docs/architecture.md](docs/architecture.md)
+
+## 경계 (하면 안 되는 것)
+
+- `.env` 파일 직접 수정 금지 (`.env.example`만 수정)
+- `data/raw/`, `data/processed/` 수동 삭제 금지
+- LangGraph API 계약 필드 변경 시 반드시 사용자 확인
+
 ## 적용 Rules
 
+- `.claude/rules/` — 이 프로젝트 전용 규칙 (glob 패턴으로 조건부 로드)
 - `~/.claude/rules/common/` — 공통 원칙 (코딩 스타일, TDD, 보안 등)
 - `~/.claude/rules/python/` — Python 특화 규칙 (ruff, mypy, pytest)
 

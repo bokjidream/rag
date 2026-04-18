@@ -2,6 +2,9 @@
 .DS_Store
 .idea
 
+# AI 작업 로그 (팀 공유 불필요)
+.dev/
+
 # Python
 __pycache__/
 *.py[cod]
