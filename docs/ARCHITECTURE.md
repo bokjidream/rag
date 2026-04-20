@@ -5,7 +5,8 @@
 ```
 src/
 ├── api/                   # FastAPI 앱 + 라우터
-│   ├── main.py            # 앱 초기화, 미들웨어
+│   ├── main.py            # 앱 초기화, lifespan (KoSimCSEEmbedder 1회 생성)
+│   ├── deps.py            # 공통 의존성 (get_embedder — 순환 임포트 방지)
 │   └── routes/
 │       └── welfare.py     # POST /welfare/search, GET /welfare/{serv_id}
 ├── crawler/               # 데이터 수집 레이어
@@ -31,12 +32,15 @@ src/
 
 tests/
 ├── unit/
-│   ├── test_chunker.py
-│   ├── test_embedder.py
-│   └── test_search.py
+│   ├── test_models.py     # step 1
+│   ├── test_db.py         # step 2
+│   ├── test_embedder.py   # step 3
+│   ├── test_chunker.py    # step 5
+│   ├── test_index.py      # step 5
+│   └── test_search.py     # step 6
 └── integration/
-    ├── test_crawler.py
-    └── test_api.py
+    ├── test_crawler.py    # step 4
+    └── test_api.py        # step 7
 
 data/
 ├── raw/                   # 수집 원본 (PDF, JSON)

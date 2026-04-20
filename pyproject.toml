@@ -75,6 +75,7 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"           # async 테스트 자동 인식
 testpaths = ["tests"]
+pythonpath = ["."]              # 프로젝트 루트를 sys.path에 추가 — from src.X import Y 해결
 # --cov-fail-under=80 은 harness 서브 Claude Stop hook과 충돌할 수 있어 addopts에서 제거.
 # 커버리지 임계값 검증은 아래 명령으로 수동 실행:
 #   pytest --cov=src --cov-fail-under=80

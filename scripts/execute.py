@@ -4,6 +4,8 @@ Harness Step Executor — phase 내 step을 순차 실행하고 자가 교정한
 
 Usage:
     python3 scripts/execute.py <phase-dir> [--push]
+
+venv 활성화 없이 실행해도 됩니다. .venv/bin이 존재하면 자동으로 PATH에 주입합니다.
 """
 
 import argparse
@@ -191,15 +193,30 @@ class StepExecutor:
                 commands.append(cmd)
         return commands
 
+    def _venv_env(self) -> dict[str, str]:
+        """venv bin을 PATH 앞에 주입한 환경변수를 반환한다.
+
+        .venv/bin이 존재하면 PATH에 추가. 없으면 현재 환경 그대로 반환.
+        venv가 이미 활성화된 경우(VIRTUAL_ENV 설정됨)에도 중복 없이 안전하게 동작한다.
+        """
+        env = os.environ.copy()
+        venv_bin = ROOT / ".venv" / "bin"
+        if venv_bin.is_dir():
+            env["PATH"] = str(venv_bin) + os.pathsep + env.get("PATH", "")
+            env["VIRTUAL_ENV"] = str(ROOT / ".venv")
+        return env
+
     def _verify_ac(self, step_num: int) -> tuple:
         """AC 커맨드를 독립 실행하여 통과 여부를 반환한다. (passed, error_message)"""
         commands = self._extract_ac_commands(step_num)
         if not commands:
             return True, ""
+        env = self._venv_env()
         for cmd in commands:
             result = subprocess.run(
                 cmd, shell=True, cwd=self._root,
                 capture_output=True, text=True, timeout=300,
+                env=env,
             )
             if result.returncode != 0:
                 output = (result.stdout + result.stderr)[-2000:]
@@ -279,6 +296,7 @@ class StepExecutor:
         result = subprocess.run(
             ["claude", "-p", "--dangerously-skip-permissions", "--output-format", "json", prompt],
             cwd=self._root, capture_output=True, text=True, timeout=1800,
+            env=self._venv_env(),
         )
 
         if result.returncode != 0:

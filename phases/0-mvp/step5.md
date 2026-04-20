@@ -160,6 +160,12 @@ Usage:
 from __future__ import annotations
 import asyncio
 import logging
+import sys
+from pathlib import Path
+
+# 프로젝트 루트를 sys.path에 추가 — `python scripts/run_pipeline.py` 직접 실행 지원
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from src.crawler.collect import collect_all
 from src.embedding.kosimcse import KoSimCSEEmbedder
 from src.pipeline.index import index_welfare_items
