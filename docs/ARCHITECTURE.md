@@ -25,7 +25,7 @@ src/
 ├── db/                    # DB 클라이언트 초기화
 │   └── chroma.py          # ChromaDB 싱글턴 클라이언트
 ├── models/                # 도메인 모델 + Pydantic 스키마
-│   └── welfare.py         # WelfareService, SearchResult, SearchRequest
+│   └── welfare.py         # WelfareRaw, SearchRequest, SearchResult, SearchResponse, WelfareDetail
 └── utils/                 # 공통 유틸
     └── pdf_parser.py      # PDF 텍스트 추출
 
@@ -53,7 +53,7 @@ data/
         ↓
 [pipeline/] ← 전처리 + 인덱싱 (embedding/ 임포트)
         ↓
-[db/chroma.py] ← ChromaDB AsyncClient 싱글턴
+[db/chroma.py] ← 동기 클라이언트 + asyncio.to_thread 싱글턴 (ADR-008)
         ↑
 [retriever/] ← 쿼리 생성 + ChromaDB 검색 (embedding/ 임포트)
         ↑
@@ -79,7 +79,7 @@ data/
 복지로 크롤링 / 공공API / PDF
   → crawler/collect.py
   → pipeline/chunker.py   (청크 분할, 1000자 / 200자 오버랩)
-  → pipeline/embedder.py  (한국어 임베딩)
+  → embedding/kosimcse.py  (한국어 임베딩, pipeline/index.py에 DI로 주입)
   → pipeline/index.py     (ChromaDB upsert)
 ```
 
