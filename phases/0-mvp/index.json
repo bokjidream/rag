@@ -1,0 +1,14 @@
+{
+  "project": "bokjidream-rag",
+  "phase": "0-mvp",
+  "steps": [
+    { "step": 0, "name": "project-setup",    "status": "pending" },
+    { "step": 1, "name": "models",           "status": "pending" },
+    { "step": 2, "name": "db-layer",         "status": "pending" },
+    { "step": 3, "name": "embedding-layer",  "status": "pending" },
+    { "step": 4, "name": "crawler",          "status": "pending" },
+    { "step": 5, "name": "pipeline",         "status": "pending" },
+    { "step": 6, "name": "retriever",        "status": "pending" },
+    { "step": 7, "name": "api-layer",        "status": "pending" }
+  ]
+}

@@ -5,7 +5,8 @@
 ```
 src/
 ├── api/                   # FastAPI 앱 + 라우터
-│   ├── main.py            # 앱 초기화, 미들웨어
+│   ├── main.py            # 앱 초기화, lifespan (KoSimCSEEmbedder 1회 생성)
+│   ├── deps.py            # 공통 의존성 (get_embedder — 순환 임포트 방지)
 │   └── routes/
 │       └── welfare.py     # POST /welfare/search, GET /welfare/{serv_id}
 ├── crawler/               # 데이터 수집 레이어
@@ -25,18 +26,21 @@ src/
 ├── db/                    # DB 클라이언트 초기화
 │   └── chroma.py          # ChromaDB 싱글턴 클라이언트
 ├── models/                # 도메인 모델 + Pydantic 스키마
-│   └── welfare.py         # WelfareService, SearchResult, SearchRequest
+│   └── welfare.py         # WelfareRaw, SearchRequest, SearchResult, SearchResponse, WelfareDetail
 └── utils/                 # 공통 유틸
     └── pdf_parser.py      # PDF 텍스트 추출
 
 tests/
 ├── unit/
-│   ├── test_chunker.py
-│   ├── test_embedder.py
-│   └── test_search.py
+│   ├── test_models.py     # step 1
+│   ├── test_db.py         # step 2
+│   ├── test_embedder.py   # step 3
+│   ├── test_chunker.py    # step 5
+│   ├── test_index.py      # step 5
+│   └── test_search.py     # step 6
 └── integration/
-    ├── test_crawler.py
-    └── test_api.py
+    ├── test_crawler.py    # step 4
+    └── test_api.py        # step 7
 
 data/
 ├── raw/                   # 수집 원본 (PDF, JSON)
@@ -53,7 +57,7 @@ data/
         ↓
 [pipeline/] ← 전처리 + 인덱싱 (embedding/ 임포트)
         ↓
-[db/chroma.py] ← ChromaDB AsyncClient 싱글턴
+[db/chroma.py] ← 동기 클라이언트 + asyncio.to_thread 싱글턴 (ADR-008)
         ↑
 [retriever/] ← 쿼리 생성 + ChromaDB 검색 (embedding/ 임포트)
         ↑
@@ -79,7 +83,7 @@ data/
 복지로 크롤링 / 공공API / PDF
   → crawler/collect.py
   → pipeline/chunker.py   (청크 분할, 1000자 / 200자 오버랩)
-  → pipeline/embedder.py  (한국어 임베딩)
+  → embedding/kosimcse.py  (한국어 임베딩, pipeline/index.py에 DI로 주입)
   → pipeline/index.py     (ChromaDB upsert)
 ```
 
