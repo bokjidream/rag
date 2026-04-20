@@ -76,6 +76,7 @@ POST /welfare/search
   "disability": false,
   "family_type": null,         # "한부모" | "다자녀" | null
   "pregnant": false,
+  "region": "서울",            # optional. 쿼리 텍스트에 포함되어 벡터 검색에 활용
   "top_k": 5
 }
 
@@ -96,6 +97,7 @@ POST /welfare/search
 
 - LangGraph가 유저 조건 구조체를 전달하면, RAG 레이어가 벡터 쿼리 + 메타데이터 필터로 변환하여 검색
 - `age`, `income_level` 외 나머지 필드는 optional
+- `region`: 공공데이터 API에 지역 필드 없음 — 메타데이터 필터 불가, 쿼리 텍스트에 포함하여 벡터 검색으로 soft 매칭. MVP 이후 크롤링으로 지역 데이터 보강 시 hard filter로 전환 가능
 - 상세 텍스트(`tgtrDtlCn`, `slctCritCn`, `alwServCn`)는 응답에 포함하지 않음 — 유저가 특정 서비스 선택 시 API 2로 별도 조회
 - MVP 기준 스펙. 항목 추가/삭제 시 LangGraph 팀(재표형)과 사전 협의
 
