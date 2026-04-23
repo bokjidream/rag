@@ -31,6 +31,8 @@ dependencies = [
 
     # 데이터 검증
     "pydantic>=2.9.0",
+    # Python 3.9에서 X | None 타입 힌트 문법 지원 (pydantic get_type_hints 호환)
+    "eval_type_backport>=0.2.0",
 ]
 
 [project.optional-dependencies]
