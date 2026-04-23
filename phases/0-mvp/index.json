@@ -61,7 +61,10 @@
     {
       "step": 7,
       "name": "api-layer",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-04-23T20:00:06+0900",
+      "summary": "src/api/ 구현 완료 — FastAPI 앱, POST /welfare/search, GET /welfare/{serv_id} 엔드포인트 완료",
+      "completed_at": "2026-04-23T20:30:00+0900"
     }
   ],
   "created_at": "2026-04-23T15:28:49+0900"
