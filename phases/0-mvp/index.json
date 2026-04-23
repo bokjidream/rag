@@ -21,7 +21,10 @@
     {
       "step": 2,
       "name": "db-layer",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-04-23T15:32:28+0900",
+      "summary": "src/db/chroma.py 생성 — 동기 클라이언트+asyncio.to_thread 싱글턴(persistent/ephemeral 분기), cosine metric, WELFARE_COLLECTION 상수 완료",
+      "completed_at": "2026-04-23T15:45:00+0900"
     },
     {
       "step": 3,
