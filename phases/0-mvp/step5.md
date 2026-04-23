@@ -23,8 +23,8 @@
 from __future__ import annotations
 from src.models.welfare import WelfareRaw
 
-CHUNK_SIZE = 1000      # 글자 수
-CHUNK_OVERLAP = 200    # 겹침 글자 수
+CHUNK_SIZE = 250       # 글자 수 기준 (≈ 375~500 토큰, ko-sroberta 512 토큰 한계 이내)
+CHUNK_OVERLAP = 50     # 겹침 글자 수 (20%)
 
 def make_document_text(item: WelfareRaw) -> str:
     """WelfareRaw의 주요 텍스트 필드를 하나의 문서로 조합."""
@@ -60,7 +60,8 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVE
       return chunks
   ```
   한국어 복지 문서는 `。`, `.\n` 빈도가 낮고 문장 경계 탐지가 불안정하므로
-  MVP에서는 순수 글자 수 기준을 사용한다. 오버랩(200자, 20%)이 문맥 단절을 보완한다.
+  MVP에서는 순수 글자 수 기준을 사용한다. 오버랩(50자, 20%)이 문맥 단절을 보완한다.
+  250자 ≈ 375~500 토큰으로 ko-sroberta 최대 입력(512 토큰)을 안전하게 유지한다.
 
 #### 2. `src/pipeline/index.py` — ChromaDB 인덱싱 진입점
 
