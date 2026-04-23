@@ -2,13 +2,48 @@
   "project": "bokjidream-rag",
   "phase": "0-mvp",
   "steps": [
-    { "step": 0, "name": "project-setup",    "status": "pending" },
-    { "step": 1, "name": "models",           "status": "pending" },
-    { "step": 2, "name": "db-layer",         "status": "pending" },
-    { "step": 3, "name": "embedding-layer",  "status": "pending" },
-    { "step": 4, "name": "crawler",          "status": "pending" },
-    { "step": 5, "name": "pipeline",         "status": "pending" },
-    { "step": 6, "name": "retriever",        "status": "pending" },
-    { "step": 7, "name": "api-layer",        "status": "pending" }
-  ]
+    {
+      "step": 0,
+      "name": "project-setup",
+      "status": "completed",
+      "started_at": "2026-04-23T15:28:49+0900",
+      "summary": "src/ 전체 디렉토리 구조(api/routes, db, embedding, models, utils), tests/unit+integration 생성 완료"
+    },
+    {
+      "step": 1,
+      "name": "models",
+      "status": "pending"
+    },
+    {
+      "step": 2,
+      "name": "db-layer",
+      "status": "pending"
+    },
+    {
+      "step": 3,
+      "name": "embedding-layer",
+      "status": "pending"
+    },
+    {
+      "step": 4,
+      "name": "crawler",
+      "status": "pending"
+    },
+    {
+      "step": 5,
+      "name": "pipeline",
+      "status": "pending"
+    },
+    {
+      "step": 6,
+      "name": "retriever",
+      "status": "pending"
+    },
+    {
+      "step": 7,
+      "name": "api-layer",
+      "status": "pending"
+    }
+  ],
+  "created_at": "2026-04-23T15:28:49+0900"
 }

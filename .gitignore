@@ -36,11 +36,12 @@ htmlcov/
 # 데이터 파일 (크롤링 결과 및 ChromaDB는 git에 올리지 않음)
 data/raw/*
 data/processed/*
-data/chroma/
+data/chroma/*
 
 # 단, 빈 폴더는 git이 추적하도록 .gitkeep은 예외
 !data/raw/.gitkeep
 !data/processed/.gitkeep
+!data/chroma/.gitkeep
 
 # harness step 실행 결과물 (로컬 전용)
 phases/**/step*-output.json
