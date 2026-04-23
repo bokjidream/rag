@@ -61,6 +61,13 @@ class StepExecutor:
     CHORE_MSG = "chore({phase}): step {num} output"
     TZ = timezone(timedelta(hours=9))
 
+    # 코드 커밋 시 스테이징할 안전한 최상위 경로 목록
+    # .env, *.pem, *secret* 등 민감 파일이 포함될 수 있는 루트 와일드카드(add -A)를 사용하지 않음
+    _SAFE_STAGE_PATHS = [
+        "src", "tests", "docs", "scripts",
+        "Makefile", "pyproject.toml", ".gitignore", ".env.example", "CLAUDE.md",
+    ]
+
     def __init__(self, phase_dir_name: str, *, auto_push: bool = False):
         self._root = str(ROOT)
         self._phases_dir = ROOT / "phases"
@@ -85,6 +92,7 @@ class StepExecutor:
 
     def run(self):
         self._print_header()
+        self._check_claude()
         self._check_blockers()
         self._checkout_branch()
         guardrails = self._load_guardrails()
@@ -139,8 +147,14 @@ class StepExecutor:
     def _commit_step(self, step_num: int, step_name: str):
         output_rel = f"phases/{self._phase_dir_name}/step{step_num}-output.json"
         index_rel = f"phases/{self._phase_dir_name}/index.json"
+        phases_rel = f"phases/{self._phase_dir_name}"
 
-        self._run_git("add", "-A")
+        # Commit 1: 코드 변경 — 허용된 경로만 스테이징, 하네스 출력 파일 제외
+        stage_paths = [p for p in self._SAFE_STAGE_PATHS if (ROOT / p).exists()]
+        if (ROOT / phases_rel).is_dir():
+            stage_paths.append(phases_rel)
+        if stage_paths:
+            self._run_git("add", "--", *stage_paths)
         self._run_git("reset", "HEAD", "--", output_rel)
         self._run_git("reset", "HEAD", "--", index_rel)
 
@@ -152,7 +166,8 @@ class StepExecutor:
             else:
                 print(f"  WARN: 코드 커밋 실패: {r.stderr.strip()}")
 
-        self._run_git("add", "-A")
+        # Commit 2: 하네스 출력 파일 (output.json, index.json)
+        self._run_git("add", "--", output_rel, index_rel)
         if self._run_git("diff", "--cached", "--quiet").returncode != 0:
             msg = self.CHORE_MSG.format(phase=self._phase_name, num=step_num)
             r = self._run_git("commit", "-m", msg)
@@ -451,13 +466,25 @@ class StepExecutor:
 
             self._execute_single_step(pending, guardrails)
 
+    def _check_claude(self) -> None:
+        """하네스 시작 전 claude CLI 바이너리 존재 여부를 확인한다."""
+        r = subprocess.run(
+            ["which", "claude"], capture_output=True, text=True, env=self._venv_env()
+        )
+        if r.returncode != 0:
+            print("  ERROR: 'claude' 바이너리를 찾을 수 없습니다.")
+            print("  Claude Code CLI가 설치되어 있는지 확인하세요: https://claude.ai/code")
+            sys.exit(1)
+
     def _finalize(self):
         index = self._read_json(self._index_file)
         index["completed_at"] = self._stamp()
         self._write_json(self._index_file, index)
         self._update_top_index("completed")
 
-        self._run_git("add", "-A")
+        phase_index_rel = f"phases/{self._phase_dir_name}/index.json"
+        top_index_rel = "phases/index.json"
+        self._run_git("add", "--", phase_index_rel, top_index_rel)
         if self._run_git("diff", "--cached", "--quiet").returncode != 0:
             msg = f"chore({self._phase_name}): mark phase completed"
             r = self._run_git("commit", "-m", msg)
