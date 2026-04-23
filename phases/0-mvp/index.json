@@ -45,7 +45,10 @@
     {
       "step": 5,
       "name": "pipeline",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-04-23T15:39:51+0900",
+      "summary": "src/pipeline/ 구현 완료 — chunker, index 함수 완료, scripts/run_pipeline.py 진입점 추가",
+      "completed_at": "2026-04-23T15:50:00+0900"
     },
     {
       "step": 6,
