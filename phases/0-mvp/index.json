@@ -7,7 +7,8 @@
       "name": "project-setup",
       "status": "completed",
       "started_at": "2026-04-23T15:28:49+0900",
-      "summary": "src/ 전체 디렉토리 구조(api/routes, db, embedding, models, utils), tests/unit+integration 생성 완료"
+      "summary": "src/ 전체 디렉토리 구조(api/routes, db, embedding, models, utils), tests/unit+integration 생성 완료",
+      "completed_at": "2026-04-23T15:30:11+0900"
     },
     {
       "step": 1,
