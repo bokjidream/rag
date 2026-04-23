@@ -37,7 +37,10 @@
     {
       "step": 4,
       "name": "crawler",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-04-23T15:36:58+0900",
+      "summary": "src/crawler/ 구현 완료 — fetch_welfare_list/detail, collect_all 함수, WelfareRaw XML 파싱 완료",
+      "completed_at": "2026-04-23T16:05:00+0900"
     },
     {
       "step": 5,
