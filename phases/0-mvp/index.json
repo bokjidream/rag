@@ -53,7 +53,10 @@
     {
       "step": 6,
       "name": "retriever",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-04-23T19:56:10+0900",
+      "summary": "src/retriever/search.py 구현 완료 — build_query_text, search_welfare, get_welfare_detail 함수 완료",
+      "completed_at": "2026-04-23T20:30:00+0900"
     },
     {
       "step": 7,
