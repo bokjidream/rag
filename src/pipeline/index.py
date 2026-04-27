@@ -53,6 +53,18 @@ async def index_welfare_items(
 
     collection: chromadb.Collection = await get_collection(WELFARE_COLLECTION)
 
+    def _get_existing_ids() -> list[str]:
+        raw = collection.get(include=[])
+        ids = raw.get("ids", [])
+        return list(ids)
+
+    existing_ids = await asyncio.to_thread(_get_existing_ids)
+    next_id_set = set(all_ids)
+    stale_ids = sorted(item_id for item_id in existing_ids if item_id not in next_id_set)
+
+    if stale_ids:
+        await asyncio.to_thread(collection.delete, ids=stale_ids)
+
     # chromadb의 embeddings/metadatas 타입은 numpy array 기반 Union이라
     # list[list[float]]와 dict[str, str]를 직접 넘기면 mypy가 불일치를 보고한다.
     # 제로-인자 클로저로 감싸서 to_thread 호출 시 타입 검사를 우회한다.

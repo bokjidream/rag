@@ -6,8 +6,8 @@ from typing import Any
 import httpx
 
 LIST_URL = (
-    "https://apis.data.go.kr/B554287/NationalWelfareInformationService"
-    "/NationalWelfarelistInquiry"
+    "https://apis.data.go.kr/B554287/NationalWelfareInformationsV001"
+    "/NationalWelfarelistV001"
 )
 
 
@@ -25,8 +25,12 @@ def _text(element: ET.Element | None) -> str:
 
 def _parse_list_xml(content: bytes) -> list[dict[str, Any]]:
     root = ET.fromstring(content)
+    infos = root.findall(".//servInfo")
+    if not infos:
+        infos = root.findall(".//servList")
+
     results: list[dict[str, Any]] = []
-    for info in root.findall("servInfo"):
+    for info in infos:
         results.append(
             {
                 "serv_id": _text(info.find("servId")),
@@ -52,8 +56,9 @@ async def fetch_welfare_list(
     params = {
         "serviceKey": api_key,
         "callTp": "L",
-        "pageIndex": str(page),
+        "pageNo": str(page),
         "numOfRows": str(per_page),
+        "srchKeyCode": "003",
     }
 
     async def _fetch(c: httpx.AsyncClient) -> list[dict[str, Any]]:

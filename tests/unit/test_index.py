@@ -54,6 +54,7 @@ async def test_index_welfare_items_returns_positive_chunk_count() -> None:
 @pytest.mark.asyncio
 async def test_index_welfare_items_calls_upsert_once() -> None:
     mock_collection = MagicMock()
+    mock_collection.get.return_value = {"ids": []}
     with patch("src.pipeline.index.get_collection", new_callable=AsyncMock, return_value=mock_collection):
         await index_welfare_items([_make_item()], _MockEmbedder())
     mock_collection.upsert.assert_called_once()
@@ -62,6 +63,7 @@ async def test_index_welfare_items_calls_upsert_once() -> None:
 @pytest.mark.asyncio
 async def test_index_welfare_items_chunk_id_format() -> None:
     mock_collection = MagicMock()
+    mock_collection.get.return_value = {"ids": []}
     with patch("src.pipeline.index.get_collection", new_callable=AsyncMock, return_value=mock_collection):
         await index_welfare_items([_make_item(serv_id="WLF00000035")], _MockEmbedder())
 
@@ -73,6 +75,7 @@ async def test_index_welfare_items_chunk_id_format() -> None:
 @pytest.mark.asyncio
 async def test_index_welfare_items_metadata_json_fields() -> None:
     mock_collection = MagicMock()
+    mock_collection.get.return_value = {"ids": []}
     item = _make_item(trgter_indvdl=["저소득", "노인"], intrs_thema=["주거", "생활지원"])
     with patch("src.pipeline.index.get_collection", new_callable=AsyncMock, return_value=mock_collection):
         await index_welfare_items([item], _MockEmbedder())
@@ -88,6 +91,7 @@ async def test_index_welfare_items_metadata_json_fields() -> None:
 @pytest.mark.asyncio
 async def test_index_welfare_items_metadata_includes_detail_fields() -> None:
     mock_collection = MagicMock()
+    mock_collection.get.return_value = {"ids": []}
     item = _make_item(
         tgtr_dtl_cn="상세 대상 내용",
         slct_crit_cn="선정 기준 내용",
@@ -108,6 +112,7 @@ async def test_index_welfare_items_metadata_includes_detail_fields() -> None:
 @pytest.mark.asyncio
 async def test_index_welfare_items_multiple_items_one_upsert() -> None:
     mock_collection = MagicMock()
+    mock_collection.get.return_value = {"ids": []}
     items = [_make_item(serv_id="WLF001"), _make_item(serv_id="WLF002")]
     with patch("src.pipeline.index.get_collection", new_callable=AsyncMock, return_value=mock_collection):
         result = await index_welfare_items(items, _MockEmbedder())
@@ -119,3 +124,19 @@ async def test_index_welfare_items_multiple_items_one_upsert() -> None:
     # WLF001, WLF002 양쪽의 청크 ID가 모두 있어야 함
     assert any("WLF001" in i for i in ids)
     assert any("WLF002" in i for i in ids)
+
+
+@pytest.mark.asyncio
+async def test_index_welfare_items_deletes_stale_chunk_ids() -> None:
+    mock_collection = MagicMock()
+    mock_collection.get.return_value = {
+        "ids": ["WLF001_chunk_0", "WLF001_chunk_1", "OLD_chunk_0"],
+    }
+    with patch("src.pipeline.index.get_collection", new_callable=AsyncMock, return_value=mock_collection):
+        await index_welfare_items([_make_item(serv_id="WLF001")], _MockEmbedder())
+
+    ids: list[str] = mock_collection.upsert.call_args.kwargs["ids"]
+    expected_stale = ["OLD_chunk_0"]
+    if "WLF001_chunk_1" not in ids:
+        expected_stale.append("WLF001_chunk_1")
+    mock_collection.delete.assert_called_once_with(ids=expected_stale)

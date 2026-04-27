@@ -6,8 +6,8 @@ from typing import Any
 import httpx
 
 DETAIL_URL = (
-    "https://apis.data.go.kr/B554287/NationalWelfareInformationService"
-    "/NationalWelfareDetailInquiry"
+    "https://apis.data.go.kr/B554287/NationalWelfareInformationsV001"
+    "/NationalWelfaredetailedV001"
 )
 
 
@@ -19,13 +19,10 @@ def _text(element: ET.Element | None) -> str:
 
 def _parse_detail_xml(content: bytes) -> dict[str, Any]:
     root = ET.fromstring(content)
-    info = root.find("servInfo")
-    if info is None:
-        return {}
     return {
-        "tgtr_dtl_cn": _text(info.find("tgtrDtlCn")),
-        "slct_crit_cn": _text(info.find("slctCritCn")),
-        "alw_serv_cn": _text(info.find("alwServCn")),
+        "tgtr_dtl_cn": _text(root.find(".//tgtrDtlCn")),
+        "slct_crit_cn": _text(root.find(".//slctCritCn")),
+        "alw_serv_cn": _text(root.find(".//alwServCn")),
     }
 
 
@@ -37,7 +34,7 @@ async def fetch_welfare_detail(
     params = {
         "serviceKey": api_key,
         "callTp": "D",
-        "srvcId": serv_id,
+        "servId": serv_id,
     }
 
     async def _fetch(c: httpx.AsyncClient) -> dict[str, Any]:

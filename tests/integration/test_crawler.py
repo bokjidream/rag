@@ -8,7 +8,6 @@ import pytest
 
 from src.models.welfare import WelfareRaw
 
-
 LIST_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <servList>
   <servInfo>
@@ -34,7 +33,7 @@ LIST_XML = """<?xml version="1.0" encoding="UTF-8"?>
     <servDtlLink>https://bokjiro.go.kr/ssis-tbu/twataa/wlfareInfo/moveTWAT52011M.do?wlfareInfoId=WLF00000002</servDtlLink>
   </servInfo>
 </servList>
-""".encode("utf-8")
+""".encode()
 
 DETAIL_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <servDtl>
@@ -45,7 +44,7 @@ DETAIL_XML = """<?xml version="1.0" encoding="UTF-8"?>
     <alwServCn>매월 최대 32만원 현금 지급</alwServCn>
   </servInfo>
 </servDtl>
-""".encode("utf-8")
+""".encode()
 
 EMPTY_ARRAY_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <servList>
@@ -61,7 +60,7 @@ EMPTY_ARRAY_XML = """<?xml version="1.0" encoding="UTF-8"?>
     <servDtlLink>https://example.com</servDtlLink>
   </servInfo>
 </servList>
-""".encode("utf-8")
+""".encode()
 
 
 def _make_response(content: bytes, status_code: int = 200) -> MagicMock:
@@ -161,10 +160,10 @@ async def test_collect_all_raises_without_api_key(monkeypatch: pytest.MonkeyPatc
 
 
 @pytest.mark.asyncio
-async def test_collect_all_skips_on_api_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    """API 오류 발생 시 해당 항목을 스킵하고 나머지를 계속 처리한다."""
-    import httpx
-
+async def test_collect_all_returns_empty_when_detail_crawler_returns_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """상세 크롤러 결과가 비어 있으면 빈 리스트를 반환한다."""
     monkeypatch.setenv("PUBLIC_DATA_API_KEY", "test_key")
 
     list_item: dict[str, Any] = {
@@ -189,22 +188,18 @@ async def test_collect_all_skips_on_api_error(monkeypatch: pytest.MonkeyPatch) -
             return [list_item]
         return []
 
-    async def mock_fetch_detail(
-        serv_id: str,
-        api_key: str,
-        client: Any = None,
-    ) -> dict[str, Any]:
-        raise httpx.HTTPError("connection error")
+    mock_crawl_details = AsyncMock(return_value=[])
 
     from src.crawler.collect import collect_all
 
     with (
         patch("src.crawler.collect.fetch_welfare_list", side_effect=mock_fetch_list),
-        patch("src.crawler.collect.fetch_welfare_detail", side_effect=mock_fetch_detail),
+        patch("src.crawler.collect._crawl_details", mock_crawl_details),
     ):
         results = await collect_all(max_pages=1)
 
     assert results == []
+    mock_crawl_details.assert_awaited_once_with([list_item])
 
 
 @pytest.mark.asyncio
@@ -228,6 +223,7 @@ async def test_collect_all_returns_welfare_raw_list(monkeypatch: pytest.MonkeyPa
         "slct_crit_cn": "소득 기준 이하",
         "alw_serv_cn": "매월 32만원",
     }
+    crawled_items = [WelfareRaw(**{**list_item, **detail_item})]
 
     async def mock_fetch_list(
         api_key: str,
@@ -239,18 +235,13 @@ async def test_collect_all_returns_welfare_raw_list(monkeypatch: pytest.MonkeyPa
             return [list_item]
         return []
 
-    async def mock_fetch_detail(
-        serv_id: str,
-        api_key: str,
-        client: Any = None,
-    ) -> dict[str, Any]:
-        return detail_item
+    mock_crawl_details = AsyncMock(return_value=crawled_items)
 
     from src.crawler.collect import collect_all
 
     with (
         patch("src.crawler.collect.fetch_welfare_list", side_effect=mock_fetch_list),
-        patch("src.crawler.collect.fetch_welfare_detail", side_effect=mock_fetch_detail),
+        patch("src.crawler.collect._crawl_details", mock_crawl_details),
     ):
         results = await collect_all(max_pages=1)
 
@@ -261,6 +252,7 @@ async def test_collect_all_returns_welfare_raw_list(monkeypatch: pytest.MonkeyPa
     assert item.tgtr_dtl_cn == "65세 이상"
     assert item.slct_crit_cn == "소득 기준 이하"
     assert item.alw_serv_cn == "매월 32만원"
+    mock_crawl_details.assert_awaited_once_with([list_item])
 
 
 # ──────────────────────────────────────────────
