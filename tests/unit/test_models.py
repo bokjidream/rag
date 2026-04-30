@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -62,6 +64,43 @@ class TestSearchRequest:
         req = SearchRequest(age=30, income_level=level)  # type: ignore[arg-type]
         assert req.income_level == level
 
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("age", -1),
+            ("age", 131),
+            ("household_size", 0),
+            ("household_size", 21),
+            ("top_k", 0),
+            ("top_k", 51),
+            ("region", ""),
+        ],
+    )
+    def test_invalid_bounds_raise(self, field: str, value: object) -> None:
+        payload: dict[str, object] = {"age": 30, "income_level": "저소득", field: value}
+        with pytest.raises(ValidationError):
+            SearchRequest(**payload)  # type: ignore[arg-type]
+
+    def test_disability_requires_severity(self) -> None:
+        with pytest.raises(ValidationError):
+            SearchRequest(age=30, income_level="저소득", disability=True)
+
+    def test_disability_severity_requires_disability_true(self) -> None:
+        with pytest.raises(ValidationError):
+            SearchRequest(age=30, income_level="저소득", disability_severity="중증")
+
+    def test_pregnant_defaults_false(self) -> None:
+        req = SearchRequest(age=30, income_level="저소득")
+        assert req.pregnant is False
+
+    def test_pregnant_true(self) -> None:
+        req = SearchRequest(age=30, income_level="저소득", pregnant=True)
+        assert req.pregnant is True
+
+    def test_strips_whitespace(self) -> None:
+        req = SearchRequest(age=30, income_level="저소득", region=" 서울 ")
+        assert req.region == "서울"
+
 
 class TestSearchResult:
     def test_includes_department_field(self) -> None:
@@ -89,6 +128,22 @@ class TestSearchResult:
                 intrs_thema=[],
                 # department 누락
             )
+
+    def test_from_metadata_maps_fields(self) -> None:
+        result = SearchResult.from_metadata(
+            {
+                "serv_id": "WLF00000001",
+                "serv_nm": "복지서비스명",
+                "serv_dgst": "서비스 개요",
+                "jur_mnof_nm": "국토교통부",
+                "trgter_indvdl": json.dumps(["저소득"], ensure_ascii=False),
+                "intrs_thema": json.dumps(["주거"], ensure_ascii=False),
+            },
+            distance=0.2,
+        )
+        assert result.department == "국토교통부"
+        assert result.score == pytest.approx(0.8)
+        assert result.trgter_indvdl == ["저소득"]
 
 
 class TestSearchResponse:
@@ -148,6 +203,25 @@ class TestWelfareDetail:
         assert detail.required_documents == []
         assert detail.application_fields == []
 
+    def test_from_metadata_maps_fields(self) -> None:
+        detail = WelfareDetail.from_metadata(
+            {
+                "serv_id": "WLF00000035",
+                "serv_nm": "서비스명",
+                "serv_dgst": "서비스 개요",
+                "tgtr_dtl_cn": "수급 대상",
+                "slct_crit_cn": "선정 기준",
+                "alw_serv_cn": "서비스 내용",
+                "sprt_cyc_nm": "월",
+                "srv_pvsn_nm": "서비스제공",
+                "trgter_indvdl": json.dumps(["저소득"], ensure_ascii=False),
+                "intrs_thema": json.dumps(["주거"], ensure_ascii=False),
+                "serv_dtl_link": "https://bokjiro.go.kr/",
+            }
+        )
+        assert detail.application_url == "https://bokjiro.go.kr/"
+        assert detail.trgter_indvdl == ["저소득"]
+
 
 class TestWelfareRaw:
     def test_normal_creation(self) -> None:
@@ -182,3 +256,30 @@ class TestWelfareRaw:
             alw_serv_cn="서비스 내용",
         )
         assert raw.tgtr_dtl_cn == "수급 대상 상세"
+
+    @pytest.mark.parametrize("field", ["serv_id", "serv_nm"])
+    def test_required_text_fields_reject_blank(self, field: str) -> None:
+        payload: dict[str, object] = {
+            "serv_id": "WLF00000001",
+            "serv_nm": "복지서비스",
+            "serv_dgst": "개요",
+            "trgter_indvdl": [],
+            "intrs_thema": [],
+        }
+        payload[field] = " "
+        with pytest.raises(ValidationError):
+            WelfareRaw(**payload)  # type: ignore[arg-type]
+
+    def test_to_metadata_serializes_array_fields(self) -> None:
+        raw = WelfareRaw(
+            serv_id="WLF00000001",
+            serv_nm="복지서비스",
+            serv_dgst="개요",
+            jur_mnof_nm="보건복지부",
+            trgter_indvdl=["저소득", "노인"],
+            intrs_thema=["생활지원"],
+        )
+        meta = raw.to_metadata()
+        assert meta["serv_id"] == "WLF00000001"
+        assert json.loads(meta["trgter_indvdl"]) == ["저소득", "노인"]
+        assert json.loads(meta["intrs_thema"]) == ["생활지원"]

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import os
+from contextlib import asynccontextmanager
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 from src.models.welfare import WelfareRaw
@@ -61,6 +63,41 @@ EMPTY_ARRAY_XML = """<?xml version="1.0" encoding="UTF-8"?>
   </servInfo>
 </servList>
 """.encode()
+
+# XML where items are <servList> elements (no <servInfo>) — exercises fallback branch
+SERV_LIST_FALLBACK_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<response>
+  <servList>
+    <servId>WLF00000099</servId>
+    <servNm>낙상 예방 서비스</servNm>
+    <servDgst>낙상 위험군 예방 지원</servDgst>
+    <jurMnofNm>보건복지부</jurMnofNm>
+    <trgterIndvdlArray>노인</trgterIndvdlArray>
+    <intrsThemaArray>노인복지</intrsThemaArray>
+    <sprtCycNm>년</sprtCycNm>
+    <srvPvsnNm>서비스</srvPvsnNm>
+    <servDtlLink>https://example.com</servDtlLink>
+  </servList>
+</response>
+""".encode()
+
+# XML missing some fields — exercises _text(None) → "" branch
+MISSING_FIELDS_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<servList>
+  <servInfo>
+    <servId>WLF00000004</servId>
+    <servNm>필드 누락 서비스</servNm>
+  </servInfo>
+</servList>
+""".encode()
+
+MISSING_DETAIL_FIELDS_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
+<servDtl>
+  <servInfo>
+    <servId>WLF00000004</servId>
+  </servInfo>
+</servDtl>
+"""
 
 
 def _make_response(content: bytes, status_code: int = 200) -> MagicMock:
@@ -253,6 +290,112 @@ async def test_collect_all_returns_welfare_raw_list(monkeypatch: pytest.MonkeyPa
     assert item.slct_crit_cn == "소득 기준 이하"
     assert item.alw_serv_cn == "매월 32만원"
     mock_crawl_details.assert_awaited_once_with([list_item])
+
+
+# ──────────────────────────────────────────────
+# build_client
+# ──────────────────────────────────────────────
+
+
+def test_build_client_returns_async_client() -> None:
+    from src.crawler.client import build_client
+
+    client = build_client()
+    assert isinstance(client, httpx.AsyncClient)
+
+
+# ──────────────────────────────────────────────
+# _text(None) — missing field fallback
+# ──────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_fetch_welfare_list_missing_fields_returns_empty_strings() -> None:
+    """XML에 일부 필드가 없을 때 _text(None) → "" 경로를 커버한다."""
+    from src.crawler.welfare_list import fetch_welfare_list
+
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=_make_response(MISSING_FIELDS_XML))
+
+    results = await fetch_welfare_list(api_key="test_key", client=mock_client)
+
+    assert results[0]["serv_dgst"] == ""
+    assert results[0]["jur_mnof_nm"] == ""
+
+
+@pytest.mark.asyncio
+async def test_fetch_welfare_detail_missing_fields_returns_empty_strings() -> None:
+    """XML에 상세 필드가 없을 때 _text(None) → "" 경로를 커버한다."""
+    from src.crawler.welfare_detail import fetch_welfare_detail
+
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=_make_response(MISSING_DETAIL_FIELDS_XML))
+
+    result = await fetch_welfare_detail(serv_id="WLF00000004", api_key="test_key", client=mock_client)
+
+    assert result["tgtr_dtl_cn"] == ""
+    assert result["slct_crit_cn"] == ""
+    assert result["alw_serv_cn"] == ""
+
+
+# ──────────────────────────────────────────────
+# servList fallback
+# ──────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_fetch_welfare_list_servlist_fallback() -> None:
+    """servInfo 요소가 없을 때 servList 요소로 폴백한다."""
+    from src.crawler.welfare_list import fetch_welfare_list
+
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=_make_response(SERV_LIST_FALLBACK_XML))
+
+    results = await fetch_welfare_list(api_key="test_key", client=mock_client)
+
+    assert len(results) == 1
+    assert results[0]["serv_id"] == "WLF00000099"
+
+
+# ──────────────────────────────────────────────
+# no-client path
+# ──────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_fetch_welfare_list_no_client_uses_build_client() -> None:
+    """client 인자 없이 호출하면 내부에서 build_client()를 사용한다."""
+    from src.crawler.welfare_list import fetch_welfare_list
+
+    mock_inner = AsyncMock()
+    mock_inner.get = AsyncMock(return_value=_make_response(LIST_XML))
+
+    @asynccontextmanager  # type: ignore[misc]
+    async def _mock_build_client(**_: object):  # type: ignore[misc]
+        yield mock_inner
+
+    with patch("src.crawler.client.build_client", _mock_build_client):
+        results = await fetch_welfare_list(api_key="test_key")
+
+    assert len(results) == 2
+
+
+@pytest.mark.asyncio
+async def test_fetch_welfare_detail_no_client_uses_build_client() -> None:
+    """client 인자 없이 호출하면 내부에서 build_client()를 사용한다."""
+    from src.crawler.welfare_detail import fetch_welfare_detail
+
+    mock_inner = AsyncMock()
+    mock_inner.get = AsyncMock(return_value=_make_response(DETAIL_XML))
+
+    @asynccontextmanager  # type: ignore[misc]
+    async def _mock_build_client(**_: object):  # type: ignore[misc]
+        yield mock_inner
+
+    with patch("src.crawler.client.build_client", _mock_build_client):
+        result = await fetch_welfare_detail(serv_id="WLF00000001", api_key="test_key")
+
+    assert result["tgtr_dtl_cn"] == "65세 이상 어르신 중 소득 하위 70%"
 
 
 # ──────────────────────────────────────────────
