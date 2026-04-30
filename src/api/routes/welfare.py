@@ -20,11 +20,6 @@ async def search(
     embedder: EmbedderDep,
 ) -> SearchResponse:
     """POST /welfare/search — 유저 조건으로 관련 서비스 top-k 검색."""
-    if request.disability and request.disability_severity is None:
-        raise HTTPException(
-            status_code=422,
-            detail="disability=True이면 disability_severity를 지정해야 합니다.",
-        )
     return await search_welfare(request, embedder)
 
 

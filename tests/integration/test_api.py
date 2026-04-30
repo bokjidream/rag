@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -117,6 +117,28 @@ class TestSearchEndpoint:
             )
 
         assert response.status_code == 200
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {"age": -1, "income_level": "저소득"},
+            {"age": 131, "income_level": "저소득"},
+            {"age": 40, "income_level": "저소득", "top_k": 0},
+            {"age": 40, "income_level": "저소득", "top_k": 51},
+            {"age": 40, "income_level": "저소득", "household_size": 0},
+            {
+                "age": 40,
+                "income_level": "저소득",
+                "disability": False,
+                "disability_severity": "중증",
+            },
+        ],
+    )
+    async def test_invalid_domain_request_returns_422(
+        self, client: AsyncClient, payload: dict[str, object]
+    ) -> None:
+        response = await client.post("/welfare/search", json=payload)
+        assert response.status_code == 422
 
 
 class TestGetDetailEndpoint:

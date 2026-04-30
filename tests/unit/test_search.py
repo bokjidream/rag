@@ -13,7 +13,11 @@ class TestBuildQueryText:
     def test_required_fields_only(self) -> None:
         request = SearchRequest(age=65, income_level="저소득")
         result = build_query_text(request)
-        assert result == "65세 저소득 거주자를 위한 복지 서비스"
+        assert "65세" in result
+        assert "노인" in result
+        assert "어르신" in result
+        assert "저소득층" in result
+        assert result.endswith("거주자를 위한 복지 서비스")
 
     def test_all_fields(self) -> None:
         request = SearchRequest(
@@ -28,15 +32,19 @@ class TestBuildQueryText:
             region="경기도",
         )
         result = build_query_text(request)
-        assert result == (
-            "45세 기초생활수급자 3인 가구 기혼 미성년 자녀 있음 장애인(중증) 취업 경기도 거주자를 위한 복지 서비스"
-        )
-
-    def test_disability_without_severity(self) -> None:
-        request = SearchRequest(age=30, income_level="차상위계층", disability=True)
-        result = build_query_text(request)
-        assert "장애인" in result
-        assert "장애인(" not in result
+        for term in [
+            "45세",
+            "중장년",
+            "기초생활수급자",
+            "국민기초생활보장",
+            "3인 가구",
+            "기혼",
+            "자녀 양육",
+            "중증 장애인",
+            "근로자",
+            "경기도",
+        ]:
+            assert term in result
 
     def test_has_children_false_excluded(self) -> None:
         request = SearchRequest(age=30, income_level="일반", has_children=False)
@@ -51,13 +59,26 @@ class TestBuildQueryText:
     def test_disability_severity_included(self) -> None:
         request = SearchRequest(age=40, income_level="저소득", disability=True, disability_severity="경증")
         result = build_query_text(request)
-        assert "장애인(경증)" in result
+        assert "경증 장애인" in result
 
     def test_region_included(self) -> None:
         request = SearchRequest(age=65, income_level="저소득", region="서울")
         result = build_query_text(request)
         assert "서울" in result
         assert result.endswith("거주자를 위한 복지 서비스")
+
+    def test_pregnant_adds_maternity_terms(self) -> None:
+        request = SearchRequest(age=30, income_level="저소득", pregnant=True)
+        result = build_query_text(request)
+        assert "임산부" in result
+        assert "임신" in result
+        assert "출산" in result
+
+    def test_not_pregnant_excludes_maternity_terms(self) -> None:
+        request = SearchRequest(age=30, income_level="저소득")
+        result = build_query_text(request)
+        assert "임산부" not in result
+        assert "임신" not in result
 
 
 class TestSearchWelfare:
@@ -107,7 +128,7 @@ class TestSearchWelfare:
         assert first.serv_id == "WLF001"
         assert first.serv_nm == "서비스1"
         assert first.department == "보건복지부"
-        assert first.score == pytest.approx(0.9)
+        assert first.score == pytest.approx(0.96)
         assert first.trgter_indvdl == ["저소득"]
         assert first.intrs_thema == ["생활지원"]
 

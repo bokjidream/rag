@@ -3,7 +3,17 @@ from __future__ import annotations
 import pytest
 
 from src.models.welfare import WelfareRaw
-from src.pipeline.chunker import CHUNK_OVERLAP, CHUNK_SIZE, chunk_text, make_document_text
+from src.pipeline.chunker import (
+    CHUNK_OVERLAP,
+    CHUNK_SIZE,
+    TOKEN_MAX,
+    TOKEN_OVERLAP,
+    WelfareChunk,
+    _window_ranges,
+    chunk_item,
+    chunk_text,
+    make_document_text,
+)
 
 
 def _make_item(**kwargs: object) -> WelfareRaw:
@@ -23,6 +33,58 @@ def _make_item(**kwargs: object) -> WelfareRaw:
     }
     defaults.update(kwargs)
     return WelfareRaw(**defaults)  # type: ignore[arg-type]
+
+
+class _FakeTokenizer:
+    """테스트용 tokenizer. 숫자 토큰 문자열은 encode/decode 라운드트립을 보장."""
+
+    def encode(self, text: str, add_special_tokens: bool = True) -> list[int]:
+        pieces = text.split()
+        if pieces and all(p.isdigit() for p in pieces):
+            ids = [int(p) for p in pieces]
+        else:
+            ids = list(range(len(text)))
+        return [-101, *ids, -102] if add_special_tokens else ids
+
+    def decode(self, token_ids: list[int], skip_special_tokens: bool = True) -> str:
+        ids = [i for i in token_ids if i >= 0] if skip_special_tokens else token_ids
+        return " ".join(str(i) for i in ids)
+
+
+class _ExpandingDecodeTokenizer:
+    """decode 후 재토큰화 길이가 늘어나는 tokenizer edge case."""
+
+    def encode(self, text: str, add_special_tokens: bool = True) -> list[int]:
+        ids = list(range(len(text)))
+        return [-101, *ids, -102] if add_special_tokens else ids
+
+    def decode(self, token_ids: list[int], skip_special_tokens: bool = True) -> str:
+        return "X" * (len(token_ids) + 5)
+
+
+class _UnknownTokenizer:
+    """skip_special_tokens=True에서 [UNK]가 빈 문자열로 decode되는 edge case."""
+
+    def encode(self, text: str, add_special_tokens: bool = True) -> list[int]:
+        ids = [3]
+        return [-101, *ids, -102] if add_special_tokens else ids
+
+    def decode(self, token_ids: list[int], skip_special_tokens: bool = True) -> str:
+        return "" if skip_special_tokens else "[UNK]"
+
+
+def _token_text(length: int) -> str:
+    return " ".join(str(i) for i in range(length))
+
+
+def _make_token_item(length: int) -> WelfareRaw:
+    return _make_item(
+        serv_nm=_token_text(length),
+        serv_dgst="",
+        tgtr_dtl_cn="",
+        slct_crit_cn="",
+        alw_serv_cn="",
+    )
 
 
 # ── chunk_text ────────────────────────────────────────────────────────────────
@@ -113,3 +175,169 @@ def test_make_document_text_field_order() -> None:
     item = _make_item()
     text = make_document_text(item)
     assert text.startswith("테스트 서비스")
+
+
+# ── chunk_item ────────────────────────────────────────────────────────────────
+
+
+def test_window_ranges_exact_fit() -> None:
+    assert _window_ranges(TOKEN_MAX, TOKEN_MAX, TOKEN_OVERLAP) == [(0, TOKEN_MAX)]
+
+
+def test_window_ranges_no_tail_duplicate() -> None:
+    stride = TOKEN_MAX - TOKEN_OVERLAP
+    assert _window_ranges(TOKEN_MAX + stride, TOKEN_MAX, TOKEN_OVERLAP) == [
+        (0, TOKEN_MAX),
+        (stride, TOKEN_MAX + stride),
+    ]
+
+
+def test_window_ranges_three_windows() -> None:
+    stride = TOKEN_MAX - TOKEN_OVERLAP
+    assert _window_ranges(TOKEN_MAX + stride + 1, TOKEN_MAX, TOKEN_OVERLAP) == [
+        (0, TOKEN_MAX),
+        (stride, TOKEN_MAX + stride),
+        (stride * 2, TOKEN_MAX + stride + 1),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("window_size", "overlap"),
+    [(0, 0), (TOKEN_MAX, TOKEN_MAX), (TOKEN_MAX, TOKEN_MAX + 1), (TOKEN_MAX, -1)],
+)
+def test_window_ranges_invalid_args(window_size: int, overlap: int) -> None:
+    with pytest.raises(ValueError):
+        _window_ranges(TOKEN_MAX, window_size, overlap)
+
+
+def test_chunk_item_returns_at_least_one_chunk() -> None:
+    item = _make_item()
+    chunks = chunk_item(item)
+    assert len(chunks) >= 1
+    assert all(isinstance(c, WelfareChunk) for c in chunks)
+
+
+def test_chunk_item_all_chunks_within_token_limit() -> None:
+    tok = _FakeTokenizer()
+    long_text = "보육교사 및 교사겸직원장의 근로여건 개선을 위해 근무환경개선비를 지원합니다. " * 20
+    item = _make_item(tgtr_dtl_cn=long_text, slct_crit_cn=long_text)
+    for chunk in chunk_item(item, tokenizer=tok):
+        assert chunk.token_count <= TOKEN_MAX, (
+            f"TOKEN_MAX 초과: {chunk.token_count} > {TOKEN_MAX}"
+        )
+
+
+def test_chunk_item_section_is_document() -> None:
+    item = _make_item()
+    chunks = chunk_item(item)
+    assert {c.section for c in chunks} == {"document"}
+
+
+def test_chunk_item_token_max_document_produces_one_chunk() -> None:
+    tok = _FakeTokenizer()
+    chunks = chunk_item(_make_token_item(TOKEN_MAX), tokenizer=tok)
+    assert len(chunks) == 1
+    assert chunks[0].token_count == TOKEN_MAX
+
+
+def test_chunk_item_token_max_plus_stride_produces_two_chunks() -> None:
+    tok = _FakeTokenizer()
+    stride = TOKEN_MAX - TOKEN_OVERLAP
+    chunks = chunk_item(_make_token_item(TOKEN_MAX + stride), tokenizer=tok)
+    assert len(chunks) == 2
+    assert [c.token_count for c in chunks] == [TOKEN_MAX, TOKEN_MAX]
+
+
+def test_chunk_item_three_windows() -> None:
+    tok = _FakeTokenizer()
+    stride = TOKEN_MAX - TOKEN_OVERLAP
+    chunks = chunk_item(_make_token_item(TOKEN_MAX + stride + 1), tokenizer=tok)
+    assert len(chunks) == 3
+    assert [c.token_count for c in chunks] == [TOKEN_MAX, TOKEN_MAX, TOKEN_OVERLAP + 1]
+
+
+def test_chunk_item_overlap_between_consecutive_chunks() -> None:
+    tok = _FakeTokenizer()
+    chunks = chunk_item(_make_token_item(TOKEN_MAX + 1), tokenizer=tok)
+    first_ids = tok.encode(chunks[0].text, add_special_tokens=False)
+    second_ids = tok.encode(chunks[1].text, add_special_tokens=False)
+    assert first_ids[-TOKEN_OVERLAP:] == second_ids[:TOKEN_OVERLAP]
+
+
+def test_chunk_item_encode_decode_token_count_within_limit() -> None:
+    tok = _FakeTokenizer()
+    stride = TOKEN_MAX - TOKEN_OVERLAP
+    chunks = chunk_item(_make_token_item(TOKEN_MAX + stride + 1), tokenizer=tok)
+    for chunk in chunks:
+        assert len(tok.encode(chunk.text, add_special_tokens=False)) <= TOKEN_MAX
+
+
+def test_chunk_item_trims_decoded_text_to_token_limit() -> None:
+    tok = _ExpandingDecodeTokenizer()
+    item = _make_item(
+        serv_nm="A" * TOKEN_MAX,
+        serv_dgst="",
+        tgtr_dtl_cn="",
+        slct_crit_cn="",
+        alw_serv_cn="",
+    )
+    chunks = chunk_item(item, tokenizer=tok)
+    assert len(chunks) == 1
+    assert chunks[0].token_count == TOKEN_MAX
+    assert len(tok.encode(chunks[0].text, add_special_tokens=False)) == TOKEN_MAX
+
+
+def test_chunk_item_preserves_unknown_token_text() -> None:
+    tok = _UnknownTokenizer()
+    item = _make_item(
+        serv_nm="A",
+        serv_dgst="",
+        tgtr_dtl_cn="",
+        slct_crit_cn="",
+        alw_serv_cn="",
+    )
+    chunks = chunk_item(item, tokenizer=tok)
+    assert len(chunks) == 1
+    assert chunks[0].text == "[UNK]"
+    assert chunks[0].token_count == 1
+
+
+def test_chunk_item_empty_optional_fields_returns_single_chunk() -> None:
+    item = _make_item(
+        serv_nm="서비스명",
+        serv_dgst="개요 설명.",
+        tgtr_dtl_cn="",
+        slct_crit_cn="",
+        alw_serv_cn="",
+    )
+    chunks = chunk_item(item)
+    assert len(chunks) == 1
+    assert "서비스명" in chunks[0].text
+
+
+def test_chunk_item_long_document_produces_multiple_chunks() -> None:
+    tok = _FakeTokenizer()
+    item = _make_token_item(TOKEN_MAX * 2 + 100)
+    chunks = chunk_item(item, tokenizer=tok)
+    assert len(chunks) > 1
+    for chunk in chunks:
+        assert chunk.token_count <= TOKEN_MAX, (
+            f"분할 후에도 TOKEN_MAX 초과: {chunk.token_count}"
+        )
+
+
+def test_chunk_item_no_tokenizer_long_sentence_split() -> None:
+    # tokenizer=None 경로: char 기반 추정으로 긴 전체 문서를 분할한다.
+    long_text = "가" * 900
+    item = _make_item(
+        serv_nm="서비스명",
+        serv_dgst="",
+        tgtr_dtl_cn=long_text,
+        slct_crit_cn="",
+        alw_serv_cn="",
+    )
+    chunks = chunk_item(item, tokenizer=None)
+    assert len(chunks) > 1
+    for chunk in chunks:
+        assert chunk.section == "document"
+        assert chunk.token_count <= TOKEN_MAX

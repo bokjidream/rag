@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import pytest
-
-from src.embedding.protocol import EmbedderProtocol
 from src.embedding.kosimcse import KoSimCSEEmbedder
+from src.embedding.protocol import EmbedderProtocol
 
 
 class MockEmbedder:

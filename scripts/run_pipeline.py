@@ -19,9 +19,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from src.crawler.collect import collect_all
-from src.embedding.kosimcse import KoSimCSEEmbedder
-from src.pipeline.index import index_welfare_items
+from src.crawler.collect import collect_all  # noqa: E402
+from src.embedding.kosimcse import KoSimCSEEmbedder  # noqa: E402
+from src.pipeline.index import index_welfare_items  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ async def main() -> None:
     logger.info("수집 시작")
     items = await collect_all()
     logger.info("수집 완료: %d건", len(items))
-    count = await index_welfare_items(items, embedder)
+    count = await index_welfare_items(items, embedder, tokenizer=embedder.tokenizer)
     logger.info("인덱싱 완료: %d 청크", count)
 
 
