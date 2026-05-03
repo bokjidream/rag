@@ -1,0 +1,90 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[project]
+name = "bokjidream-rag"
+version = "0.1.0"
+description = "복지서비스 RAG 파이프라인 - LangGraph 팀에 검색결과 JSON 반환"
+requires-python = ">=3.9"
+
+dependencies = [
+    # API 서버
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+
+    # 임베딩: 한국어 특화 HuggingFace 모델 (로컬, 무료, Sovereign AI)
+    "sentence-transformers>=3.0.0",
+
+    # 벡터 DB (1.5.x 기준 설계 — ADR-008 참고)
+    "chromadb>=1.5.0",
+
+    # 환경변수 관리
+    "python-dotenv>=1.0.0",
+
+    # HTTP 클라이언트 (공공데이터 API 호출)
+    "httpx>=0.27.0",
+
+    # 복지로 상세 페이지 크롤링
+    "playwright>=1.50.0",
+
+    # 데이터 검증
+    "pydantic>=2.9.0",
+    # Python 3.9에서 X | None 타입 힌트 문법 지원 (pydantic get_type_hints 호환)
+    "eval_type_backport>=0.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    # 테스트
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",   # async 테스트 지원
+    "pytest-cov>=6.0.0",        # 커버리지 측정
+    "httpx>=0.27.0",             # FastAPI TestClient용
+
+    # 코드 품질 (ruff = 포매터 + 린터 통합)
+    "ruff>=0.7.0",
+    "mypy>=1.13.0",              # 타입 체커
+]
+
+# ─── ruff 설정 (포매터 + 린터) ─────────────────────────────────────
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes (미사용 import 등)
+    "I",   # isort (import 정렬)
+    "B",   # flake8-bugbear (흔한 버그 패턴)
+    "UP",  # pyupgrade (구버전 문법 자동 업그레이드)
+]
+ignore = ["E501"]  # line-length는 formatter가 처리
+
+[tool.ruff.format]
+quote-style = "double"
+
+# ─── mypy 설정 (타입 체커) ─────────────────────────────────────────
+[tool.mypy]
+python_version = "3.9"
+strict = true
+ignore_missing_imports = true
+
+# ─── pytest 설정 ───────────────────────────────────────────────────
+[tool.pytest.ini_options]
+asyncio_mode = "auto"           # async 테스트 자동 인식
+testpaths = ["tests"]
+pythonpath = ["."]              # 프로젝트 루트를 sys.path에 추가 — from src.X import Y 해결
+# --cov-fail-under=80 은 harness 서브 Claude Stop hook과 충돌할 수 있어 addopts에서 제거.
+# 커버리지 임계값 검증은 아래 명령으로 수동 실행:
+#   pytest --cov=src --cov-fail-under=80
+addopts = "--cov=src --cov-report=term-missing"
+markers = [
+    "integration: 실제 외부 서비스(API, DB)에 의존하는 테스트 — 기본 실행 제외",
+]

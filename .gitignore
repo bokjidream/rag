@@ -1,0 +1,48 @@
+# macOS
+.DS_Store
+.idea
+
+# AI 작업 로그 (팀 공유 불필요)
+.dev/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# 가상환경 (node_modules 같은 것)
+.venv/
+venv/
+env/
+
+# 패키지 빌드 결과물
+dist/
+build/
+*.egg-info/
+
+# 환경변수 (API 키 같은 민감 정보)
+.env
+
+# 타입 체커 캐시
+.mypy_cache/
+
+# 테스트 커버리지 결과
+.coverage
+htmlcov/
+.pytest_cache/
+
+# 데이터 파일 (크롤링 결과는 git에 올리지 않음)
+data/raw/*
+data/processed/*
+
+# 단, 빈 폴더는 git이 추적하도록 .gitkeep은 예외
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# harness step 실행 결과물 (로컬 전용)
+phases/**/step*-output.json
+
+# ruff 캐시
+.ruff_cache/
