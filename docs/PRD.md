@@ -37,13 +37,23 @@ GET /welfare/{serv_id}
   "trgter_indvdl": ["저소득"],
   "intrs_thema": ["주거", "생활지원"],
   "application_url": "https://bokjiro.go.kr/...",
-  "required_documents": [],
-  "application_fields": []
+  "application_method": "읍면동 주민센터 방문 신청 ... 구비서류: 신분증, 가족관계증명서 ...",
+  "application_forms": [
+    {
+      "title": "생활비용보조 신청서.hwp",
+      "url": "https://bokjiro.go.kr/ssis-tbu/CmmFileUtil/getDownload.do?...",
+      "file_type": "hwp"
+    }
+  ],
+  "required_documents": ["신분증", "가족관계증명서"]
 }
 ```
 
 - `application_url`: 공공데이터 API `servDtlLink` 필드 매핑
-- `required_documents`, `application_fields`: MVP에서 빈 배열 반환. 복지로 크롤링 추가 시 채워질 예정
+- `application_method`: 복지로 "신청방법" 섹션 원문. 크롤링 실패 시 빈 문자열
+- `application_forms`: 공공데이터포털 상세 API `basfrmList`의 서식/자료 파일 메타데이터. 일일 호출 제한 때문에 증분 수집하며, 미수집 또는 `basfrmList` 없음이면 빈 배열
+- `required_documents`: `application_method`에서 구비/제출/첨부 서류 키워드로 추출한 목록. 패턴이 불명확하면 빈 배열
+- `application_fields`: 제거 예정 — LangGraph 팀(재표형)과 협의 완료 전까지 클라이언트 코드 변경 금지
 
 ### API 2: RAG 검색 — 요약 목록 반환 (LangGraph 전용)
 

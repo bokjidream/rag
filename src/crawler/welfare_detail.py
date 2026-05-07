@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 
@@ -17,12 +17,47 @@ def _text(element: ET.Element | None) -> str:
     return element.text.strip()
 
 
+def _detect_file_type(title: str, url: str) -> Literal["pdf", "hwp", "hwpx", "etc"]:
+    haystack = f"{title} {url}".lower()
+    for file_type in ("hwpx", "hwp", "pdf"):
+        if f".{file_type}" in haystack:
+            return file_type
+    return "etc"
+
+
+def _parse_application_forms(root: ET.Element) -> list[dict[str, str]]:
+    forms: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+
+    for form in root.findall(".//basfrmList"):
+        title = _text(form.find("servSeDetailNm"))
+        url = _text(form.find("servSeDetailLink"))
+        if not title and not url:
+            continue
+
+        key = (title, url)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        forms.append(
+            {
+                "title": title,
+                "url": url,
+                "file_type": _detect_file_type(title, url),
+            }
+        )
+
+    return forms
+
+
 def _parse_detail_xml(content: bytes) -> dict[str, Any]:
     root = ET.fromstring(content)
     return {
         "tgtr_dtl_cn": _text(root.find(".//tgtrDtlCn")),
         "slct_crit_cn": _text(root.find(".//slctCritCn")),
         "alw_serv_cn": _text(root.find(".//alwServCn")),
+        "application_forms": _parse_application_forms(root),
     }
 
 

@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from src.models.welfare import (
+    ApplicationForm,
     SearchRequest,
     SearchResponse,
     SearchResult,
@@ -166,7 +167,7 @@ class TestSearchResponse:
 
 
 class TestWelfareDetail:
-    def test_includes_application_fields(self) -> None:
+    def test_includes_application_method_and_required_documents(self) -> None:
         detail = WelfareDetail(
             serv_id="WLF00000035",
             serv_nm="서비스명",
@@ -179,14 +180,23 @@ class TestWelfareDetail:
             trgter_indvdl=["저소득"],
             intrs_thema=["주거", "생활지원"],
             application_url="https://bokjiro.go.kr/",
-            required_documents=[],
-            application_fields=[],
+            application_method="주민센터 방문 신청\n구비서류: 신분증",
+            application_forms=[
+                ApplicationForm(
+                    title="생활비용보조 신청서.hwp",
+                    url="https://bokjiro.go.kr/download/form.hwp",
+                    file_type="hwp",
+                )
+            ],
+            required_documents=["신분증"],
         )
         assert detail.application_url == "https://bokjiro.go.kr/"
-        assert detail.required_documents == []
-        assert detail.application_fields == []
+        assert detail.application_method == "주민센터 방문 신청\n구비서류: 신분증"
+        assert detail.application_forms[0].title == "생활비용보조 신청서.hwp"
+        assert detail.application_forms[0].file_type == "hwp"
+        assert detail.required_documents == ["신분증"]
 
-    def test_default_empty_lists(self) -> None:
+    def test_default_empty_values(self) -> None:
         detail = WelfareDetail(
             serv_id="WLF00000035",
             serv_nm="서비스명",
@@ -200,8 +210,9 @@ class TestWelfareDetail:
             intrs_thema=[],
             application_url="https://bokjiro.go.kr/",
         )
+        assert detail.application_method == ""
+        assert detail.application_forms == []
         assert detail.required_documents == []
-        assert detail.application_fields == []
 
     def test_from_metadata_maps_fields(self) -> None:
         detail = WelfareDetail.from_metadata(
@@ -217,10 +228,39 @@ class TestWelfareDetail:
                 "trgter_indvdl": json.dumps(["저소득"], ensure_ascii=False),
                 "intrs_thema": json.dumps(["주거"], ensure_ascii=False),
                 "serv_dtl_link": "https://bokjiro.go.kr/",
+                "application_forms": json.dumps(
+                    [
+                        {
+                            "title": "보훈장학신청서(서식).hwp",
+                            "url": "https://bokjiro.go.kr/download/form.hwp",
+                            "file_type": "hwp",
+                        }
+                    ],
+                    ensure_ascii=False,
+                ),
             }
         )
         assert detail.application_url == "https://bokjiro.go.kr/"
         assert detail.trgter_indvdl == ["저소득"]
+        assert detail.application_forms[0].title == "보훈장학신청서(서식).hwp"
+
+    def test_from_metadata_defaults_application_forms_for_legacy_metadata(self) -> None:
+        detail = WelfareDetail.from_metadata(
+            {
+                "serv_id": "WLF00000035",
+                "serv_nm": "서비스명",
+                "serv_dgst": "서비스 개요",
+                "tgtr_dtl_cn": "수급 대상",
+                "slct_crit_cn": "선정 기준",
+                "alw_serv_cn": "서비스 내용",
+                "sprt_cyc_nm": "월",
+                "srv_pvsn_nm": "서비스제공",
+                "trgter_indvdl": json.dumps(["저소득"], ensure_ascii=False),
+                "intrs_thema": json.dumps(["주거"], ensure_ascii=False),
+                "serv_dtl_link": "https://bokjiro.go.kr/",
+            }
+        )
+        assert detail.application_forms == []
 
 
 class TestWelfareRaw:
@@ -278,8 +318,22 @@ class TestWelfareRaw:
             jur_mnof_nm="보건복지부",
             trgter_indvdl=["저소득", "노인"],
             intrs_thema=["생활지원"],
+            application_forms=[
+                ApplicationForm(
+                    title="응급안전안심서비스 신청서.hwp",
+                    url="https://bokjiro.go.kr/download/emergency.hwp",
+                    file_type="hwp",
+                )
+            ],
         )
         meta = raw.to_metadata()
         assert meta["serv_id"] == "WLF00000001"
         assert json.loads(meta["trgter_indvdl"]) == ["저소득", "노인"]
         assert json.loads(meta["intrs_thema"]) == ["생활지원"]
+        assert json.loads(meta["application_forms"]) == [
+            {
+                "title": "응급안전안심서비스 신청서.hwp",
+                "url": "https://bokjiro.go.kr/download/emergency.hwp",
+                "file_type": "hwp",
+            }
+        ]

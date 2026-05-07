@@ -158,7 +158,9 @@ class TestGetDetailEndpoint:
         assert body["serv_nm"] == "테스트 서비스"
         assert body["tgtr_dtl_cn"] == "수급 대상 상세"
         assert body["required_documents"] == []
-        assert body["application_fields"] == []
+        assert body["application_method"] == ""
+        assert body["application_forms"] == []
+        assert "application_fields" not in body
 
     async def test_nonexistent_id_returns_404(self, client: AsyncClient) -> None:
         with patch(

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -45,6 +47,14 @@ DETAIL_XML = """<?xml version="1.0" encoding="UTF-8"?>
     <slctCritCn>소득인정액 기준 이하</slctCritCn>
     <alwServCn>매월 최대 32만원 현금 지급</alwServCn>
   </servInfo>
+  <basfrmList>
+    <servSeDetailLink>https://bokjiro.go.kr/download/form.hwp</servSeDetailLink>
+    <servSeDetailNm>기초연금 신청서.hwp</servSeDetailNm>
+  </basfrmList>
+  <basfrmList>
+    <servSeDetailLink>https://bokjiro.go.kr/download/guide.pdf</servSeDetailLink>
+    <servSeDetailNm>2026년 기초연금 사업안내.pdf</servSeDetailNm>
+  </basfrmList>
 </servDtl>
 """.encode()
 
@@ -179,6 +189,18 @@ async def test_fetch_welfare_detail_parses_fields() -> None:
     assert result["tgtr_dtl_cn"] == "65세 이상 어르신 중 소득 하위 70%"
     assert result["slct_crit_cn"] == "소득인정액 기준 이하"
     assert result["alw_serv_cn"] == "매월 최대 32만원 현금 지급"
+    assert result["application_forms"] == [
+        {
+            "title": "기초연금 신청서.hwp",
+            "url": "https://bokjiro.go.kr/download/form.hwp",
+            "file_type": "hwp",
+        },
+        {
+            "title": "2026년 기초연금 사업안내.pdf",
+            "url": "https://bokjiro.go.kr/download/guide.pdf",
+            "file_type": "pdf",
+        },
+    ]
 
 
 # ──────────────────────────────────────────────
@@ -199,9 +221,12 @@ async def test_collect_all_raises_without_api_key(monkeypatch: pytest.MonkeyPatc
 @pytest.mark.asyncio
 async def test_collect_all_returns_empty_when_detail_crawler_returns_empty(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """상세 크롤러 결과가 비어 있으면 빈 리스트를 반환한다."""
     monkeypatch.setenv("PUBLIC_DATA_API_KEY", "test_key")
+    monkeypatch.setenv("APPLICATION_FORMS_API_LIMIT", "0")
+    monkeypatch.setenv("APPLICATION_FORMS_STATE_PATH", str(tmp_path / "forms_state.json"))
 
     list_item: dict[str, Any] = {
         "serv_id": "WLF00000001",
@@ -240,9 +265,14 @@ async def test_collect_all_returns_empty_when_detail_crawler_returns_empty(
 
 
 @pytest.mark.asyncio
-async def test_collect_all_returns_welfare_raw_list(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_collect_all_returns_welfare_raw_list(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     """정상 응답일 때 WelfareRaw 객체 리스트를 반환한다."""
     monkeypatch.setenv("PUBLIC_DATA_API_KEY", "test_key")
+    monkeypatch.setenv("APPLICATION_FORMS_API_LIMIT", "0")
+    monkeypatch.setenv("APPLICATION_FORMS_STATE_PATH", str(tmp_path / "forms_state.json"))
 
     list_item: dict[str, Any] = {
         "serv_id": "WLF00000001",
@@ -336,6 +366,113 @@ async def test_fetch_welfare_detail_missing_fields_returns_empty_strings() -> No
     assert result["tgtr_dtl_cn"] == ""
     assert result["slct_crit_cn"] == ""
     assert result["alw_serv_cn"] == ""
+    assert result["application_forms"] == []
+
+
+@pytest.mark.asyncio
+async def test_enrich_application_forms_uses_cached_state(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """API 호출 제한이 0이어도 기존 fetch 상태 파일의 신청서 자료는 반영한다."""
+    state_path = tmp_path / "forms_state.json"
+    cached_forms = [
+        {
+            "title": "보훈장학신청서(서식).hwp",
+            "url": "https://bokjiro.go.kr/download/form.hwp",
+            "file_type": "hwp",
+        }
+    ]
+    state_path.write_text(
+        json.dumps(
+            {
+                "WLF00000054": {
+                    "status": "success",
+                    "fetched_at": "2026-05-07T00:00:00+00:00",
+                    "application_forms": cached_forms,
+                }
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("APPLICATION_FORMS_API_LIMIT", "0")
+    monkeypatch.setenv("APPLICATION_FORMS_STATE_PATH", str(state_path))
+
+    from src.crawler.collect import _enrich_application_forms
+
+    results = await _enrich_application_forms(
+        [{"serv_id": "WLF00000054", "serv_nm": "보훈장학금"}],
+        api_key="test_key",
+    )
+
+    assert results[0]["application_forms"] == cached_forms
+
+
+@pytest.mark.asyncio
+async def test_enrich_application_forms_fetches_up_to_limit_and_records_empty_results(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """상세 API 호출 수를 제한하고, basfrmList가 없는 서비스도 성공 상태로 기록한다."""
+    state_path = tmp_path / "forms_state.json"
+    monkeypatch.setenv("APPLICATION_FORMS_API_LIMIT", "2")
+    monkeypatch.setenv("APPLICATION_FORMS_STATE_PATH", str(state_path))
+    monkeypatch.setattr("src.crawler.collect._APPLICATION_FORMS_FETCH_DELAY_SECONDS", 0)
+
+    async def mock_fetch_detail(
+        serv_id: str,
+        api_key: str,
+        client: Any = None,
+    ) -> dict[str, Any]:
+        if serv_id == "WLF00001093":
+            return {
+                "application_forms": [
+                    {
+                        "title": "응급안전안심서비스 신청서.hwp",
+                        "url": "https://bokjiro.go.kr/download/emergency.hwp",
+                        "file_type": "hwp",
+                    }
+                ]
+            }
+        return {"application_forms": []}
+
+    mock_client = AsyncMock()
+
+    @asynccontextmanager  # type: ignore[misc]
+    async def _mock_build_client(**_: object):  # type: ignore[misc]
+        yield mock_client
+
+    from src.crawler.collect import _enrich_application_forms
+
+    with (
+        patch("src.crawler.collect.build_client", _mock_build_client),
+        patch("src.crawler.collect.fetch_welfare_detail", side_effect=mock_fetch_detail) as mock_fetch,
+    ):
+        results = await _enrich_application_forms(
+            [
+                {"serv_id": "WLF00001093", "serv_nm": "응급안전안심서비스"},
+                {"serv_id": "WLF00000035", "serv_nm": "개발제한구역 생활비용보조"},
+                {"serv_id": "WLF00000054", "serv_nm": "보훈장학금"},
+            ],
+            api_key="test_key",
+        )
+
+    assert mock_fetch.await_count == 2
+    assert results[0]["application_forms"] == [
+        {
+            "title": "응급안전안심서비스 신청서.hwp",
+            "url": "https://bokjiro.go.kr/download/emergency.hwp",
+            "file_type": "hwp",
+        }
+    ]
+    assert results[1]["application_forms"] == []
+    assert "application_forms" not in results[2]
+
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["WLF00001093"]["status"] == "success"
+    assert state["WLF00000035"]["application_forms"] == []
+    assert "WLF00000054" not in state
 
 
 # ──────────────────────────────────────────────
