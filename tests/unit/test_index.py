@@ -76,7 +76,17 @@ async def test_index_welfare_items_chunk_id_format() -> None:
 async def test_index_welfare_items_metadata_json_fields() -> None:
     mock_collection = MagicMock()
     mock_collection.get.return_value = {"ids": []}
-    item = _make_item(trgter_indvdl=["저소득", "노인"], intrs_thema=["주거", "생활지원"])
+    item = _make_item(
+        trgter_indvdl=["저소득", "노인"],
+        intrs_thema=["주거", "생활지원"],
+        application_forms=[
+            {
+                "title": "보훈장학신청서(서식).hwp",
+                "url": "https://bokjiro.go.kr/download/form.hwp",
+                "file_type": "hwp",
+            }
+        ],
+    )
     with patch("src.pipeline.index.get_collection", new_callable=AsyncMock, return_value=mock_collection):
         await index_welfare_items([item], _MockEmbedder())
 
@@ -84,8 +94,16 @@ async def test_index_welfare_items_metadata_json_fields() -> None:
     for meta in metadatas:
         assert isinstance(meta["trgter_indvdl"], str)
         assert isinstance(meta["intrs_thema"], str)
+        assert isinstance(meta["application_forms"], str)
         assert json.loads(str(meta["trgter_indvdl"])) == ["저소득", "노인"]
         assert json.loads(str(meta["intrs_thema"])) == ["주거", "생활지원"]
+        assert json.loads(str(meta["application_forms"])) == [
+            {
+                "title": "보훈장학신청서(서식).hwp",
+                "url": "https://bokjiro.go.kr/download/form.hwp",
+                "file_type": "hwp",
+            }
+        ]
 
 
 @pytest.mark.asyncio

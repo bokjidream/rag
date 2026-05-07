@@ -204,7 +204,8 @@ class TestGetWelfareDetail:
         assert result.intrs_thema == ["주거"]
         assert result.application_url == "https://example.com"
         assert result.required_documents == []
-        assert result.application_fields == []
+        assert result.application_method == ""
+        assert result.application_forms == []
 
     @pytest.mark.asyncio
     async def test_returns_none_when_not_found(self) -> None:

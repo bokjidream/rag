@@ -64,6 +64,14 @@ class SearchResponse(BaseModel):
     results: list[SearchResult]
 
 
+class ApplicationForm(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    title: str
+    url: str = ""
+    file_type: Literal["pdf", "hwp", "hwpx", "etc"] = "etc"
+
+
 class WelfareDetail(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
@@ -78,8 +86,9 @@ class WelfareDetail(BaseModel):
     trgter_indvdl: list[str]
     intrs_thema: list[str]
     application_url: str = ""
+    application_method: str = ""
+    application_forms: list[ApplicationForm] = Field(default_factory=list)
     required_documents: list[str] = Field(default_factory=list)
-    application_fields: list[str] = Field(default_factory=list)
 
     @classmethod
     def from_metadata(cls, metadata: Mapping[str, str]) -> WelfareDetail:
@@ -95,6 +104,12 @@ class WelfareDetail(BaseModel):
             trgter_indvdl=json.loads(metadata["trgter_indvdl"]),
             intrs_thema=json.loads(metadata["intrs_thema"]),
             application_url=metadata["serv_dtl_link"],
+            application_method=metadata.get("application_method", ""),
+            application_forms=[
+                ApplicationForm(**item)
+                for item in json.loads(metadata.get("application_forms", "[]"))
+            ],
+            required_documents=json.loads(metadata.get("required_documents", "[]")),
         )
 
 
@@ -113,6 +128,9 @@ class WelfareRaw(BaseModel):
     tgtr_dtl_cn: str = ""
     slct_crit_cn: str = ""
     alw_serv_cn: str = ""
+    application_method: str = ""
+    application_forms: list[ApplicationForm] = Field(default_factory=list)
+    required_documents: list[str] = Field(default_factory=list)
 
     def to_metadata(self) -> dict[str, str]:
         return {
@@ -128,4 +146,10 @@ class WelfareRaw(BaseModel):
             "tgtr_dtl_cn": self.tgtr_dtl_cn,
             "slct_crit_cn": self.slct_crit_cn,
             "alw_serv_cn": self.alw_serv_cn,
+            "application_method": self.application_method,
+            "application_forms": json.dumps(
+                [form.model_dump() for form in self.application_forms],
+                ensure_ascii=False,
+            ),
+            "required_documents": json.dumps(self.required_documents, ensure_ascii=False),
         }
