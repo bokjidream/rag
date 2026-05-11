@@ -1,46 +1,65 @@
-# 프로젝트: BokjiDream RAG
+# CLAUDE.md
 
-## 기술 스택
+Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
 
-| 항목 | 선택 |
-|------|------|
-| 런타임/프레임워크 | Python 3.9+ / FastAPI |
-| 언어 | Python 3.9 (type hints, strict mypy) |
-| 벡터 DB | ChromaDB |
-| 임베딩 | sentence-transformers (한국어 모델) |
-| RAG 프레임워크 | LangChain |
-| 크롤링 | Playwright + httpx |
-| 테스트 | pytest + pytest-asyncio |
-| 린트/포매터 | ruff |
-| 타입 체커 | mypy (strict) |
-| 패키지 매니저 | pip (pyproject.toml) |
+**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
-## 명령어
+## 1. Think Before Coding
 
-| 용도 | 커맨드 |
-|------|--------|
-| 개발 서버 | `uvicorn src.api.main:app --reload` |
-| 테스트 | `pytest --cov=src --cov-report=term-missing` |
-| 린트 | `ruff check src/ tests/` |
-| 타입 체크 | `mypy src/` |
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
 
-## 아키텍처 규칙
+Before implementing:
+- State your assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them - don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
 
-- CRITICAL: RAG 검색 결과는 반드시 합의된 `List[SearchResult]` JSON 스키마로 반환한다 — LangGraph 팀과 인터페이스를 임의로 변경하지 말 것
-- CRITICAL: 사용자 개인정보(나이, 소득, 가구원 수 등)를 외부 API나 로그에 전송하지 말 것 (Sovereign AI 요건)
-- CRITICAL: 레이어 경계를 지킨다 — 크롤러는 `src/crawler/`에만, 임베딩/인덱싱은 `src/pipeline/`에만, 검색은 `src/retriever/`에만
-- ChromaDB 클라이언트는 `src/db/` 에서만 초기화하고 싱글턴으로 관리한다
-- 외부 API(공공데이터포털, 복지로) 호출은 `src/crawler/` 레이어에서만 수행한다
+## 2. Simplicity First
 
-## 개발 프로세스
+**Minimum code that solves the problem. Nothing speculative.**
 
-- CRITICAL: 새 기능 구현 시 반드시 테스트를 먼저 작성하고 (RED), 테스트가 통과하는 최소 구현을 작성할 것 (GREEN → REFACTOR)
-- 커밋 메시지는 conventional commits 형식을 따를 것 (feat:, fix:, docs:, refactor:)
-- 테스트 커버리지 80% 이상 유지
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If you write 200 lines and it could be 50, rewrite it.
 
-## 하네스 실행 규칙
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
 
-- CRITICAL: 각 step을 시작하기 전에 해당 step의 `.md` 파일과 `docs/` 전체를 반드시 읽을 것
-- CRITICAL: step 완료 조건은 `## Acceptance Criteria` 커맨드가 실제로 통과하는 것이다 — 단순히 코드 작성으로 완료가 아님
-- CRITICAL: AC 커맨드 실패 시 즉시 원인 분석 후 수정하고 재실행한다 (최대 3회 재시도, 초과 시 `"status": "error"`)
-- 사용자 개입이 필요한 상황(API 키, 외부 서비스 등)이 되면 즉시 `"status": "blocked"`로 마킹하고 중단한다
+## 3. Surgical Changes
+
+**Touch only what you must. Clean up only your own mess.**
+
+When editing existing code:
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it - don't delete it.
+
+When your changes create orphans:
+- Remove imports/variables/functions that YOUR changes made unused.
+- Don't remove pre-existing dead code unless asked.
+
+The test: Every changed line should trace directly to the user's request.
+
+## 4. Goal-Driven Execution
+
+**Define success criteria. Loop until verified.**
+
+Transform tasks into verifiable goals:
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Refactor X" → "Ensure tests pass before and after"
+
+For multi-step tasks, state a brief plan:
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
+```
+
+Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+---
+
+**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
