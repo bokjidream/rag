@@ -14,7 +14,7 @@ run-mvp-push:
 
 # 코드 품질
 lint:
-	.venv/bin/ruff check src/ tests/
+	.venv/bin/ruff check src/ tests/ scripts/
 
 typecheck:
 	.venv/bin/mypy src/
