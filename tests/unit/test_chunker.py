@@ -222,9 +222,7 @@ def test_chunk_item_all_chunks_within_token_limit() -> None:
     long_text = "보육교사 및 교사겸직원장의 근로여건 개선을 위해 근무환경개선비를 지원합니다. " * 20
     item = _make_item(tgtr_dtl_cn=long_text, slct_crit_cn=long_text)
     for chunk in chunk_item(item, tokenizer=tok):
-        assert chunk.token_count <= TOKEN_MAX, (
-            f"TOKEN_MAX 초과: {chunk.token_count} > {TOKEN_MAX}"
-        )
+        assert chunk.token_count <= TOKEN_MAX, f"TOKEN_MAX 초과: {chunk.token_count} > {TOKEN_MAX}"
 
 
 def test_chunk_item_section_is_document() -> None:
@@ -321,9 +319,7 @@ def test_chunk_item_long_document_produces_multiple_chunks() -> None:
     chunks = chunk_item(item, tokenizer=tok)
     assert len(chunks) > 1
     for chunk in chunks:
-        assert chunk.token_count <= TOKEN_MAX, (
-            f"분할 후에도 TOKEN_MAX 초과: {chunk.token_count}"
-        )
+        assert chunk.token_count <= TOKEN_MAX, f"분할 후에도 TOKEN_MAX 초과: {chunk.token_count}"
 
 
 def test_chunk_item_no_tokenizer_long_sentence_split() -> None:

@@ -259,9 +259,7 @@ _SEARCH_CASES = [
     ),
     (
         "청년_기초수급_실업_취업지원_top3",
-        SearchRequest(
-            age=27, income_level="기초생활수급자", employment_status="실업", top_k=5
-        ),
+        SearchRequest(age=27, income_level="기초생활수급자", employment_status="실업", top_k=5),
         "T003",
         3,
     ),
@@ -308,6 +306,5 @@ class TestSearchQuality:
         response = await search_welfare(req, embedder)
         result_ids = [r.serv_id for r in response.results]
         assert expected_id in result_ids[:top_k], (
-            f"[{name}] 기대 서비스 {expected_id}가 top{top_k} 안에 없음. "
-            f"실제 순위: {result_ids}"
+            f"[{name}] 기대 서비스 {expected_id}가 top{top_k} 안에 없음. 실제 순위: {result_ids}"
         )

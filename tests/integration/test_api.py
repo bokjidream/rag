@@ -50,9 +50,7 @@ async def client() -> AsyncGenerator[AsyncClient, None]:
 
 
 class TestSearchEndpoint:
-    async def test_valid_request_returns_200_and_search_response(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_valid_request_returns_200_and_search_response(self, client: AsyncClient) -> None:
         with patch(
             "src.api.routes.welfare.search_welfare",
             new_callable=AsyncMock,
@@ -79,9 +77,7 @@ class TestSearchEndpoint:
         )
         assert response.status_code == 422
 
-    async def test_disability_true_without_severity_returns_422(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_disability_true_without_severity_returns_422(self, client: AsyncClient) -> None:
         with patch(
             "src.api.routes.welfare.search_welfare",
             new_callable=AsyncMock,
@@ -98,9 +94,7 @@ class TestSearchEndpoint:
 
         assert response.status_code == 422
 
-    async def test_disability_true_with_severity_returns_200(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_disability_true_with_severity_returns_200(self, client: AsyncClient) -> None:
         with patch(
             "src.api.routes.welfare.search_welfare",
             new_callable=AsyncMock,
@@ -142,9 +136,7 @@ class TestSearchEndpoint:
 
 
 class TestGetDetailEndpoint:
-    async def test_existing_id_returns_200_and_welfare_detail(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_existing_id_returns_200_and_welfare_detail(self, client: AsyncClient) -> None:
         with patch(
             "src.api.routes.welfare.get_welfare_detail",
             new_callable=AsyncMock,

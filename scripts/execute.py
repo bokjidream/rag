@@ -64,8 +64,15 @@ class StepExecutor:
     # 코드 커밋 시 스테이징할 안전한 최상위 경로 목록
     # .env, *.pem, *secret* 등 민감 파일이 포함될 수 있는 루트 와일드카드(add -A)를 사용하지 않음
     _SAFE_STAGE_PATHS = [
-        "src", "tests", "docs", "scripts",
-        "Makefile", "pyproject.toml", ".gitignore", ".env.example", "CLAUDE.md",
+        "src",
+        "tests",
+        "docs",
+        "scripts",
+        "Makefile",
+        "pyproject.toml",
+        ".gitignore",
+        ".env.example",
+        "CLAUDE.md",
     ]
 
     def __init__(self, phase_dir_name: str, *, auto_push: bool = False):
@@ -134,7 +141,11 @@ class StepExecutor:
             return
 
         r = self._run_git("rev-parse", "--verify", branch)
-        r = self._run_git("checkout", branch) if r.returncode == 0 else self._run_git("checkout", "-b", branch)
+        r = (
+            self._run_git("checkout", branch)
+            if r.returncode == 0
+            else self._run_git("checkout", "-b", branch)
+        )
 
         if r.returncode != 0:
             print(f"  ERROR: 브랜치 '{branch}' checkout 실패.")
@@ -184,7 +195,11 @@ class StepExecutor:
         for phase in top.get("phases", []):
             if phase.get("dir") == self._phase_dir_name:
                 phase["status"] = status
-                ts_key = {"completed": "completed_at", "error": "failed_at", "blocked": "blocked_at"}.get(status)
+                ts_key = {
+                    "completed": "completed_at",
+                    "error": "failed_at",
+                    "blocked": "blocked_at",
+                }.get(status)
                 if ts_key:
                     phase[ts_key] = ts
                 break
@@ -229,8 +244,12 @@ class StepExecutor:
         env = self._venv_env()
         for cmd in commands:
             result = subprocess.run(
-                cmd, shell=True, cwd=self._root,
-                capture_output=True, text=True, timeout=300,
+                cmd,
+                shell=True,
+                cwd=self._root,
+                capture_output=True,
+                text=True,
+                timeout=300,
                 env=env,
             )
             if result.returncode != 0:
@@ -262,11 +281,10 @@ class StepExecutor:
             return ""
         return "## 이전 Step 산출물\n\n" + "\n".join(lines) + "\n\n"
 
-    def _build_preamble(self, guardrails: str, step_context: str,
-                        prev_error: Optional[str] = None) -> str:
-        commit_example = self.FEAT_MSG.format(
-            phase=self._phase_name, num="N", name="<step-name>"
-        )
+    def _build_preamble(
+        self, guardrails: str, step_context: str, prev_error: Optional[str] = None
+    ) -> str:
+        commit_example = self.FEAT_MSG.format(phase=self._phase_name, num="N", name="<step-name>")
         retry_section = ""
         if prev_error:
             retry_section = (
@@ -290,9 +308,9 @@ class StepExecutor:
             f"4. AC(Acceptance Criteria) 커맨드를 반드시 직접 실행하여 모두 통과함을 확인하라.\n"
             f"   ※ 하네스가 AC 커맨드를 독립 재실행하여 검증한다. 실패 시 자동 재시도된다.\n"
             f"5. /phases/{self._phase_dir_name}/index.json의 해당 step status를 업데이트하라:\n"
-            f"   - 모든 테스트 통과 → \"completed\" + \"summary\" 필드에 이 step의 산출물을 한 줄로 요약\n"
-            f"   - {self.MAX_RETRIES}회 수정 시도 후에도 실패 → \"error\" + \"error_message\" 기록\n"
-            f"   - 사용자 개입이 필요한 경우 (API 키, 인증, 수동 설정 등) → \"blocked\" + \"blocked_reason\" 기록 후 즉시 중단\n"
+            f'   - 모든 테스트 통과 → "completed" + "summary" 필드에 이 step의 산출물을 한 줄로 요약\n'
+            f'   - {self.MAX_RETRIES}회 수정 시도 후에도 실패 → "error" + "error_message" 기록\n'
+            f'   - 사용자 개입이 필요한 경우 (API 키, 인증, 수동 설정 등) → "blocked" + "blocked_reason" 기록 후 즉시 중단\n'
             f"6. 모든 변경사항을 커밋하라:\n"
             f"   {commit_example}\n\n---\n\n"
         )
@@ -310,7 +328,10 @@ class StepExecutor:
         prompt = preamble + step_file.read_text()
         result = subprocess.run(
             ["claude", "-p", "--dangerously-skip-permissions", "--output-format", "json", prompt],
-            cwd=self._root, capture_output=True, text=True, timeout=1800,
+            cwd=self._root,
+            capture_output=True,
+            text=True,
+            timeout=1800,
             env=self._venv_env(),
         )
 
@@ -320,9 +341,11 @@ class StepExecutor:
                 print(f"  stderr: {result.stderr[:500]}")
 
         output = {
-            "step": step_num, "name": step_name,
+            "step": step_num,
+            "name": step_name,
             "exitCode": result.returncode,
-            "stdout": result.stdout, "stderr": result.stderr,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
         }
         out_path = self._phase_dir / f"step{step_num}-output.json"
         with open(out_path, "w") as f:
@@ -333,12 +356,12 @@ class StepExecutor:
     # --- 헤더 & 검증 ---
 
     def _print_header(self):
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"  Harness Step Executor")
         print(f"  Phase: {self._phase_name} | Steps: {self._total}")
         if self._auto_push:
             print(f"  Auto-push: enabled")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
     def _check_blockers(self):
         index = self._read_json(self._index_file)
@@ -367,7 +390,9 @@ class StepExecutor:
     def _execute_single_step(self, step: dict, guardrails: str) -> bool:
         """단일 step 실행 (재시도 포함). 완료되면 True, 실패/차단이면 False."""
         step_num, step_name = step["step"], step["name"]
-        done = sum(1 for s in self._read_json(self._index_file)["steps"] if s["status"] == "completed")
+        done = sum(
+            1 for s in self._read_json(self._index_file)["steps"] if s["status"] == "completed"
+        )
         prev_error = None
 
         for attempt in range(1, self.MAX_RETRIES + 1):
@@ -384,7 +409,10 @@ class StepExecutor:
                 elapsed = int(pi.elapsed)
 
             index = self._read_json(self._index_file)
-            status = next((s.get("status", "pending") for s in index["steps"] if s["step"] == step_num), "pending")
+            status = next(
+                (s.get("status", "pending") for s in index["steps"] if s["step"] == step_num),
+                "pending",
+            )
             ts = self._stamp()
 
             if status == "completed":
@@ -415,14 +443,21 @@ class StepExecutor:
                     if s["step"] == step_num:
                         s["blocked_at"] = ts
                 self._write_json(self._index_file, index)
-                reason = next((s.get("blocked_reason", "") for s in index["steps"] if s["step"] == step_num), "")
+                reason = next(
+                    (s.get("blocked_reason", "") for s in index["steps"] if s["step"] == step_num),
+                    "",
+                )
                 print(f"  ⏸ Step {step_num}: {step_name} blocked [{elapsed}s]")
                 print(f"    Reason: {reason}")
                 self._update_top_index("blocked")
                 sys.exit(2)
 
             err_msg = next(
-                (s.get("error_message", "Step did not update status") for s in index["steps"] if s["step"] == step_num),
+                (
+                    s.get("error_message", "Step did not update status")
+                    for s in index["steps"]
+                    if s["step"] == step_num
+                ),
                 "Step did not update status",
             )
 
@@ -442,7 +477,9 @@ class StepExecutor:
                         s["failed_at"] = ts
                 self._write_json(self._index_file, index)
                 self._commit_step(step_num, step_name)
-                print(f"  ✗ Step {step_num}: {step_name} failed after {self.MAX_RETRIES} attempts [{elapsed}s]")
+                print(
+                    f"  ✗ Step {step_num}: {step_name} failed after {self.MAX_RETRIES} attempts [{elapsed}s]"
+                )
                 print(f"    Error: {err_msg}")
                 self._update_top_index("error")
                 sys.exit(1)
@@ -499,9 +536,9 @@ class StepExecutor:
                 sys.exit(1)
             print(f"  ✓ Pushed to origin/{branch}")
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"  Phase '{self._phase_name}' completed!")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
 
 def main():

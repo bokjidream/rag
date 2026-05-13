@@ -120,7 +120,11 @@ def _rank_score(request: SearchRequest, metadata: dict[str, str], distance: floa
 
 def build_query_text(request: SearchRequest) -> str:
     """SearchRequest → 한국어 자연어 쿼리 문자열 변환."""
-    parts: list[str] = [f"{request.age}세", *_age_terms(request.age), *_income_terms(request.income_level)]
+    parts: list[str] = [
+        f"{request.age}세",
+        *_age_terms(request.age),
+        *_income_terms(request.income_level),
+    ]
     if request.household_size is not None:
         parts.append(f"{request.household_size}인 가구")
     if request.marital_status is not None:

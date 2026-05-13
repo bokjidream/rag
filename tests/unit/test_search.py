@@ -57,7 +57,9 @@ class TestBuildQueryText:
         assert "자녀" not in result
 
     def test_disability_severity_included(self) -> None:
-        request = SearchRequest(age=40, income_level="저소득", disability=True, disability_severity="경증")
+        request = SearchRequest(
+            age=40, income_level="저소득", disability=True, disability_severity="경증"
+        )
         result = build_query_text(request)
         assert "경증 장애인" in result
 
