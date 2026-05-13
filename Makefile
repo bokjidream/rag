@@ -1,4 +1,4 @@
-.PHONY: setup run-mvp run-mvp-push lint typecheck test
+.PHONY: setup run-mvp run-mvp-push lint typecheck test test-unit test-integration test-search-quality test-all
 
 # 개발 환경 초기 설정
 setup:
@@ -19,5 +19,16 @@ lint:
 typecheck:
 	.venv/bin/mypy src/
 
-test:
-	.venv/bin/pytest --cov=src --cov-report=term-missing
+test: test-unit
+
+test-unit:
+	.venv/bin/pytest tests/unit --cov=src --cov-report=term-missing
+
+test-integration:
+	.venv/bin/pytest tests/integration/test_api.py tests/integration/test_crawler.py --cov=src --cov-report=term-missing
+
+test-search-quality:
+	.venv/bin/pytest tests/integration/test_search_quality.py --cov=src --cov-report=term-missing
+
+test-all:
+	.venv/bin/pytest tests --cov=src --cov-report=term-missing
