@@ -41,6 +41,11 @@ data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 
+# ChromaDB SQLite 런타임 부산물 (seed DB 파일 자체는 git에 포함)
+data/chroma/*.sqlite3-wal
+data/chroma/*.sqlite3-shm
+data/chroma/*.sqlite3-journal
+
 # harness step 실행 결과물 (로컬 전용)
 phases/**/step*-output.json
 
