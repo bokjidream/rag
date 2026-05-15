@@ -6,6 +6,24 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+EligibilityStatus = Literal["likely", "needs_more_info", "unlikely"]
+
+
+class EligibilityEvidence(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    field: str
+    text: str
+
+
+class EligibilityEvaluation(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    status: EligibilityStatus = "likely"
+    reasons: list[str] = Field(default_factory=list)
+    missing_fields: list[str] = Field(default_factory=list)
+    evidence: list[EligibilityEvidence] = Field(default_factory=list)
+
 
 class SearchRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
@@ -41,6 +59,10 @@ class SearchResult(BaseModel):
     score: float
     trgter_indvdl: list[str]
     intrs_thema: list[str]
+    eligibility_status: EligibilityStatus = "likely"
+    eligibility_reasons: list[str] = Field(default_factory=list)
+    missing_fields: list[str] = Field(default_factory=list)
+    evidence: list[EligibilityEvidence] = Field(default_factory=list)
 
     @classmethod
     def from_metadata(

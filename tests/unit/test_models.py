@@ -117,6 +117,10 @@ class TestSearchResult:
         assert result.department == "국토교통부"
         assert result.score == 0.87
         assert result.trgter_indvdl == ["저소득"]
+        assert result.eligibility_status == "likely"
+        assert result.eligibility_reasons == []
+        assert result.missing_fields == []
+        assert result.evidence == []
 
     def test_missing_field_raises(self) -> None:
         with pytest.raises(ValidationError):
@@ -145,6 +149,27 @@ class TestSearchResult:
         assert result.department == "국토교통부"
         assert result.score == pytest.approx(0.8)
         assert result.trgter_indvdl == ["저소득"]
+        assert result.eligibility_status == "likely"
+
+    def test_accepts_eligibility_fields(self) -> None:
+        result = SearchResult(
+            serv_id="WLF00000001",
+            serv_nm="복지서비스명",
+            serv_dgst="서비스 개요",
+            department="국토교통부",
+            score=0.87,
+            trgter_indvdl=["저소득"],
+            intrs_thema=["주거"],
+            eligibility_status="needs_more_info",
+            eligibility_reasons=["추가 확인 필요"],
+            missing_fields=["alw_serv_cn"],
+            evidence=[{"field": "slct_crit_cn", "text": "부양자녀가 있는 경우"}],
+        )
+
+        assert result.eligibility_status == "needs_more_info"
+        assert result.eligibility_reasons == ["추가 확인 필요"]
+        assert result.missing_fields == ["alw_serv_cn"]
+        assert result.evidence[0].field == "slct_crit_cn"
 
 
 class TestSearchResponse:

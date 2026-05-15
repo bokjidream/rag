@@ -69,6 +69,10 @@ class TestSearchEndpoint:
         assert result["serv_id"] == "WLF00000035"
         assert result["serv_nm"] == "테스트 서비스"
         assert result["score"] == pytest.approx(0.87)
+        assert result["eligibility_status"] == "likely"
+        assert result["eligibility_reasons"] == []
+        assert result["missing_fields"] == []
+        assert result["evidence"] == []
 
     async def test_missing_required_field_returns_422(self, client: AsyncClient) -> None:
         response = await client.post(
