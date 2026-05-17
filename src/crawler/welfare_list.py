@@ -5,10 +5,7 @@ from typing import Any
 
 import httpx
 
-LIST_URL = (
-    "https://apis.data.go.kr/B554287/NationalWelfareInformationsV001"
-    "/NationalWelfarelistV001"
-)
+LIST_URL = "https://apis.data.go.kr/B554287/NationalWelfareInformationsV001/NationalWelfarelistV001"
 
 
 def _parse_array(text: str | None) -> list[str]:

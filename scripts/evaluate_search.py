@@ -195,7 +195,9 @@ EVAL_CASES: tuple[EvalCase, ...] = (
     ),
     EvalCase(
         "저소득_임산부",
-        SearchRequest(age=30, income_level="저소득", marital_status="기혼", pregnant=True, top_k=10),
+        SearchRequest(
+            age=30, income_level="저소득", marital_status="기혼", pregnant=True, top_k=10
+        ),
         ("WLF00001088", "WLF00000061", "WLF00001135", "WLF00003178"),
         "고위험 임산부, 임신출산 진료비, 해산급여, 긴급복지 해산비",
     ),
@@ -245,7 +247,9 @@ async def _diagnose_case(case: EvalCase, embedder: KoSimCSEEmbedder) -> None:
     expected = set(case.expected_ids)
 
     print(f"\nDIAGNOSE {case.name}  query={query_text}")
-    print(f"  {'#':>3}  {'raw':>4}  {'dist':>6}  {'boost':>6}  {'score':>6}  serv_id          serv_nm")
+    print(
+        f"  {'#':>3}  {'raw':>4}  {'dist':>6}  {'boost':>6}  {'score':>6}  serv_id          serv_nm"
+    )
     for final_rank, (raw_rank, meta, dist, boost, score) in enumerate(ranked[:15], start=1):
         marker = "* " if meta["serv_id"] in expected else "  "
         print(

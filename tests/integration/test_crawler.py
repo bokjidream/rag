@@ -122,6 +122,7 @@ def _make_response(content: bytes, status_code: int = 200) -> MagicMock:
 # fetch_welfare_list
 # ──────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_fetch_welfare_list_parses_fields() -> None:
     """목록 API XML 응답에서 WelfareRaw 필드를 정상 파싱한다."""
@@ -176,6 +177,7 @@ async def test_fetch_welfare_list_empty_arrays() -> None:
 # fetch_welfare_detail
 # ──────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_fetch_welfare_detail_parses_fields() -> None:
     """상세 API XML 응답에서 상세 필드를 정상 파싱한다."""
@@ -184,7 +186,9 @@ async def test_fetch_welfare_detail_parses_fields() -> None:
     mock_client = AsyncMock()
     mock_client.get = AsyncMock(return_value=_make_response(DETAIL_XML))
 
-    result = await fetch_welfare_detail(serv_id="WLF00000001", api_key="test_key", client=mock_client)
+    result = await fetch_welfare_detail(
+        serv_id="WLF00000001", api_key="test_key", client=mock_client
+    )
 
     assert result["tgtr_dtl_cn"] == "65세 이상 어르신 중 소득 하위 70%"
     assert result["slct_crit_cn"] == "소득인정액 기준 이하"
@@ -206,6 +210,7 @@ async def test_fetch_welfare_detail_parses_fields() -> None:
 # ──────────────────────────────────────────────
 # collect_all
 # ──────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_collect_all_raises_without_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -361,7 +366,9 @@ async def test_fetch_welfare_detail_missing_fields_returns_empty_strings() -> No
     mock_client = AsyncMock()
     mock_client.get = AsyncMock(return_value=_make_response(MISSING_DETAIL_FIELDS_XML))
 
-    result = await fetch_welfare_detail(serv_id="WLF00000004", api_key="test_key", client=mock_client)
+    result = await fetch_welfare_detail(
+        serv_id="WLF00000004", api_key="test_key", client=mock_client
+    )
 
     assert result["tgtr_dtl_cn"] == ""
     assert result["slct_crit_cn"] == ""
@@ -447,7 +454,9 @@ async def test_enrich_application_forms_fetches_up_to_limit_and_records_empty_re
 
     with (
         patch("src.crawler.collect.build_client", _mock_build_client),
-        patch("src.crawler.collect.fetch_welfare_detail", side_effect=mock_fetch_detail) as mock_fetch,
+        patch(
+            "src.crawler.collect.fetch_welfare_detail", side_effect=mock_fetch_detail
+        ) as mock_fetch,
     ):
         results = await _enrich_application_forms(
             [
@@ -538,6 +547,7 @@ async def test_fetch_welfare_detail_no_client_uses_build_client() -> None:
 # ──────────────────────────────────────────────
 # Integration tests (require real API key)
 # ──────────────────────────────────────────────
+
 
 @pytest.mark.integration
 @pytest.mark.asyncio

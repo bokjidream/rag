@@ -36,7 +36,9 @@ def _make_item(**kwargs: object) -> WelfareRaw:
 @pytest.mark.asyncio
 async def test_index_welfare_items_empty_list() -> None:
     mock_collection = MagicMock()
-    with patch("src.pipeline.index.get_collection", new_callable=AsyncMock, return_value=mock_collection):
+    with patch(
+        "src.pipeline.index.get_collection", new_callable=AsyncMock, return_value=mock_collection
+    ):
         result = await index_welfare_items([], _MockEmbedder())
     assert result == 0
     mock_collection.upsert.assert_not_called()
@@ -45,7 +47,9 @@ async def test_index_welfare_items_empty_list() -> None:
 @pytest.mark.asyncio
 async def test_index_welfare_items_returns_positive_chunk_count() -> None:
     mock_collection = MagicMock()
-    with patch("src.pipeline.index.get_collection", new_callable=AsyncMock, return_value=mock_collection):
+    with patch(
+        "src.pipeline.index.get_collection", new_callable=AsyncMock, return_value=mock_collection
+    ):
         result = await index_welfare_items([_make_item()], _MockEmbedder())
     assert isinstance(result, int)
     assert result > 0
@@ -55,7 +59,9 @@ async def test_index_welfare_items_returns_positive_chunk_count() -> None:
 async def test_index_welfare_items_calls_upsert_once() -> None:
     mock_collection = MagicMock()
     mock_collection.get.return_value = {"ids": []}
-    with patch("src.pipeline.index.get_collection", new_callable=AsyncMock, return_value=mock_collection):
+    with patch(
+        "src.pipeline.index.get_collection", new_callable=AsyncMock, return_value=mock_collection
+    ):
         await index_welfare_items([_make_item()], _MockEmbedder())
     mock_collection.upsert.assert_called_once()
 
@@ -64,7 +70,9 @@ async def test_index_welfare_items_calls_upsert_once() -> None:
 async def test_index_welfare_items_chunk_id_format() -> None:
     mock_collection = MagicMock()
     mock_collection.get.return_value = {"ids": []}
-    with patch("src.pipeline.index.get_collection", new_callable=AsyncMock, return_value=mock_collection):
+    with patch(
+        "src.pipeline.index.get_collection", new_callable=AsyncMock, return_value=mock_collection
+    ):
         await index_welfare_items([_make_item(serv_id="WLF00000035")], _MockEmbedder())
 
     ids: list[str] = mock_collection.upsert.call_args.kwargs["ids"]
@@ -87,7 +95,9 @@ async def test_index_welfare_items_metadata_json_fields() -> None:
             }
         ],
     )
-    with patch("src.pipeline.index.get_collection", new_callable=AsyncMock, return_value=mock_collection):
+    with patch(
+        "src.pipeline.index.get_collection", new_callable=AsyncMock, return_value=mock_collection
+    ):
         await index_welfare_items([item], _MockEmbedder())
 
     metadatas: list[dict[str, object]] = mock_collection.upsert.call_args.kwargs["metadatas"]
@@ -116,7 +126,9 @@ async def test_index_welfare_items_metadata_includes_detail_fields() -> None:
         alw_serv_cn="급여 내용",
         serv_dgst="서비스 요약",
     )
-    with patch("src.pipeline.index.get_collection", new_callable=AsyncMock, return_value=mock_collection):
+    with patch(
+        "src.pipeline.index.get_collection", new_callable=AsyncMock, return_value=mock_collection
+    ):
         await index_welfare_items([item], _MockEmbedder())
 
     metadatas: list[dict[str, object]] = mock_collection.upsert.call_args.kwargs["metadatas"]
@@ -132,7 +144,9 @@ async def test_index_welfare_items_multiple_items_one_upsert() -> None:
     mock_collection = MagicMock()
     mock_collection.get.return_value = {"ids": []}
     items = [_make_item(serv_id="WLF001"), _make_item(serv_id="WLF002")]
-    with patch("src.pipeline.index.get_collection", new_callable=AsyncMock, return_value=mock_collection):
+    with patch(
+        "src.pipeline.index.get_collection", new_callable=AsyncMock, return_value=mock_collection
+    ):
         result = await index_welfare_items(items, _MockEmbedder())
 
     assert result > 0
@@ -150,7 +164,9 @@ async def test_index_welfare_items_deletes_stale_chunk_ids() -> None:
     mock_collection.get.return_value = {
         "ids": ["WLF001_chunk_0", "WLF001_chunk_1", "OLD_chunk_0"],
     }
-    with patch("src.pipeline.index.get_collection", new_callable=AsyncMock, return_value=mock_collection):
+    with patch(
+        "src.pipeline.index.get_collection", new_callable=AsyncMock, return_value=mock_collection
+    ):
         await index_welfare_items([_make_item(serv_id="WLF001")], _MockEmbedder())
 
     ids: list[str] = mock_collection.upsert.call_args.kwargs["ids"]

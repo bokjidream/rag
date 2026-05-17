@@ -259,9 +259,7 @@ _SEARCH_CASES = [
     ),
     (
         "청년_기초수급_실업_취업지원_top3",
-        SearchRequest(
-            age=27, income_level="기초생활수급자", employment_status="실업", top_k=5
-        ),
+        SearchRequest(age=27, income_level="기초생활수급자", employment_status="실업", top_k=5),
         "T003",
         3,
     ),
@@ -271,6 +269,79 @@ _SEARCH_CASES = [
 _SEARCH_CASES_PARAMS = [
     pytest.param(name, req, expected_id, top_k, id=name)
     for name, req, expected_id, top_k in _SEARCH_CASES
+]
+
+
+_ELIGIBILITY_ITEMS = [
+    WelfareRaw(
+        serv_id="E001",
+        serv_nm="독거노인·장애인 응급안전안심서비스",
+        serv_dgst="독거노인과 장애인 가구의 응급 상황 대응을 지원합니다.",
+        jur_mnof_nm="보건복지부",
+        trgter_indvdl=["노인", "장애인"],
+        intrs_thema=["돌봄"],
+        slct_crit_cn=(
+            "독거노인은 실제로 혼자 살고있는 만 65세 이상의 노인입니다. "
+            "장애인 가구는 장애인활동지원 수급자이면서 독거 또는 취약가구에 "
+            "해당하는 장애인입니다."
+        ),
+    ),
+    WelfareRaw(
+        serv_id="E002",
+        serv_nm="가사·간병 방문 지원사업",
+        serv_dgst="가사·간병 서비스가 필요한 저소득 가구를 지원합니다.",
+        jur_mnof_nm="보건복지부",
+        trgter_indvdl=["저소득"],
+        intrs_thema=["돌봄"],
+        tgtr_dtl_cn=(
+            "만 65세 미만의 기준중위소득 70% 이하 계층 중 가사·간병 서비스가 "
+            "필요한 자를 지원합니다."
+        ),
+        slct_crit_cn=(
+            "장애의 정도가 심한 장애인, 6개월 이상 치료를 요하는 중증질환자, "
+            "희귀난치성 질환자, 한부모가정, 만 65세 미만의 의료급여 수급자 중 "
+            "장기입원 사례관리 퇴원자 등이 신청할 수 있습니다."
+        ),
+    ),
+    WelfareRaw(
+        serv_id="E003",
+        serv_nm="근로·자녀장려금",
+        serv_dgst="저소득 근로 가구와 자녀 양육 가구에 장려금을 지급합니다.",
+        jur_mnof_nm="국세청",
+        trgter_indvdl=["저소득"],
+        intrs_thema=["소득지원"],
+        slct_crit_cn=(
+            "근로소득 또는 사업소득 또는 종교인소득이 있는 거주자로서 요건을 "
+            "갖춘 경우 신청 가능합니다. 자녀장려금은 부양자녀가 있는 경우 "
+            "적용됩니다."
+        ),
+    ),
+    WelfareRaw(
+        serv_id="E004",
+        serv_nm="생계급여(맞춤형 급여)",
+        serv_dgst="저소득 가구의 최저 생활을 보장하기 위해 생계급여를 지급합니다.",
+        jur_mnof_nm="보건복지부",
+        trgter_indvdl=["기초생활수급자"],
+        intrs_thema=["생활지원"],
+        tgtr_dtl_cn=(
+            "가구의 소득인정액이 생계급여 선정기준 이하로서 생계급여 수급자로 "
+            "결정된 수급자에게 지급합니다."
+        ),
+        slct_crit_cn="생계급여 기준 중위소득 32% 이하입니다.",
+    ),
+    WelfareRaw(
+        serv_id="E005",
+        serv_nm="자활근로(기초, 차상위)",
+        serv_dgst="저소득층의 자립을 위해 자활근로 참여 기회를 제공합니다.",
+        jur_mnof_nm="보건복지부",
+        trgter_indvdl=["기초생활수급자", "차상위계층"],
+        intrs_thema=["일자리"],
+        tgtr_dtl_cn="국민기초생활보장법에 따른 수급자 및 차상위 계층을 지원합니다.",
+        slct_crit_cn=(
+            "조건부수급자, 자활급여특례자, 일반수급자, 차상위자 중 자활사업 참여 "
+            "자격이 있는 사람을 대상으로 합니다."
+        ),
+    ),
 ]
 
 
@@ -308,6 +379,37 @@ class TestSearchQuality:
         response = await search_welfare(req, embedder)
         result_ids = [r.serv_id for r in response.results]
         assert expected_id in result_ids[:top_k], (
-            f"[{name}] 기대 서비스 {expected_id}가 top{top_k} 안에 없음. "
-            f"실제 순위: {result_ids}"
+            f"[{name}] 기대 서비스 {expected_id}가 top{top_k} 안에 없음. 실제 순위: {result_ids}"
         )
+
+
+@pytest.mark.integration
+class TestEligibilityGuardrail:
+    async def test_filters_unlikely_and_marks_needs_more_info(
+        self,
+        embedder: KoSimCSEEmbedder,
+    ) -> None:
+        await index_welfare_items(_ELIGIBILITY_ITEMS, embedder)
+
+        response = await search_welfare(
+            SearchRequest(
+                age=61,
+                income_level="저소득",
+                household_size=1,
+                marital_status="사별",
+                has_children=False,
+                disability=False,
+                employment_status="비경제활동",
+                region="대구",
+                top_k=5,
+            ),
+            embedder,
+        )
+
+        results_by_id = {result.serv_id: result for result in response.results}
+        result_ids = list(results_by_id)
+
+        assert "E001" not in result_ids
+        assert results_by_id["E002"].eligibility_status == "needs_more_info"
+        assert results_by_id["E003"].eligibility_status == "needs_more_info"
+        assert results_by_id["E004"].eligibility_status in {"likely", "needs_more_info"}

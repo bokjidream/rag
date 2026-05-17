@@ -7,6 +7,7 @@ from typing import Any
 from src.db.chroma import WELFARE_COLLECTION, get_collection
 from src.embedding.protocol import EmbedderProtocol
 from src.models.welfare import SearchRequest, SearchResponse, SearchResult, WelfareDetail
+from src.retriever.eligibility import evaluate_eligibility
 
 
 def _age_terms(age: int) -> list[str]:
@@ -120,7 +121,11 @@ def _rank_score(request: SearchRequest, metadata: dict[str, str], distance: floa
 
 def build_query_text(request: SearchRequest) -> str:
     """SearchRequest → 한국어 자연어 쿼리 문자열 변환."""
-    parts: list[str] = [f"{request.age}세", *_age_terms(request.age), *_income_terms(request.income_level)]
+    parts: list[str] = [
+        f"{request.age}세",
+        *_age_terms(request.age),
+        *_income_terms(request.income_level),
+    ]
     if request.household_size is not None:
         parts.append(f"{request.household_size}인 가구")
     if request.marital_status is not None:
@@ -155,7 +160,7 @@ async def search_welfare(
     def _query() -> Any:
         return collection.query(
             query_embeddings=[vec],  # type: ignore[arg-type]
-            n_results=min(request.top_k * 5, 100),
+            n_results=min(request.top_k * 10, 100),
         )
 
     raw: Any = await asyncio.to_thread(_query)
@@ -172,10 +177,24 @@ async def search_welfare(
             best_by_serv_id[serv_id] = (metadata, distance, score)
 
     ranked = sorted(best_by_serv_id.values(), key=lambda item: item[2], reverse=True)
-    search_results = [
-        SearchResult.from_metadata(metadata, distance, score=score)
-        for metadata, distance, score in ranked[: request.top_k]
-    ]
+    search_results: list[SearchResult] = []
+    for metadata, distance, score in ranked:
+        result = SearchResult.from_metadata(metadata, distance, score=score)
+        eligibility = evaluate_eligibility(request, metadata)
+        if eligibility.status == "unlikely":
+            continue
+        search_results.append(
+            result.model_copy(
+                update={
+                    "eligibility_status": eligibility.status,
+                    "eligibility_reasons": eligibility.reasons,
+                    "missing_fields": eligibility.missing_fields,
+                    "evidence": eligibility.evidence,
+                }
+            )
+        )
+        if len(search_results) >= request.top_k:
+            break
 
     return SearchResponse(results=search_results)
 

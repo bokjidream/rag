@@ -31,9 +31,7 @@ async def test_get_client_returns_same_instance_on_second_call():
 async def test_get_client_no_race_condition_on_concurrent_calls():
     """asyncio.gather로 동시 호출 시 동일 인스턴스를 반환해야 한다 (race condition 없음)."""
     os.environ["CHROMA_MODE"] = "ephemeral"
-    clients = await __import__("asyncio").gather(
-        get_client(), get_client(), get_client()
-    )
+    clients = await __import__("asyncio").gather(get_client(), get_client(), get_client())
     assert clients[0] is clients[1]
     assert clients[1] is clients[2]
 

@@ -6,8 +6,7 @@ from typing import Any, Literal
 import httpx
 
 DETAIL_URL = (
-    "https://apis.data.go.kr/B554287/NationalWelfareInformationsV001"
-    "/NationalWelfaredetailedV001"
+    "https://apis.data.go.kr/B554287/NationalWelfareInformationsV001/NationalWelfaredetailedV001"
 )
 
 

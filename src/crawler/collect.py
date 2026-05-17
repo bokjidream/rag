@@ -62,7 +62,9 @@ def _application_forms_api_limit() -> int:
     try:
         return max(0, int(raw))
     except ValueError:
-        logger.warning("%s 값이 정수가 아니어서 0으로 처리합니다: %s", _APPLICATION_FORMS_API_LIMIT, raw)
+        logger.warning(
+            "%s 값이 정수가 아니어서 0으로 처리합니다: %s", _APPLICATION_FORMS_API_LIMIT, raw
+        )
         return 0
 
 
