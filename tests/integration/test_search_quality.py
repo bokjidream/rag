@@ -6,6 +6,7 @@ from collections.abc import Generator
 import pytest
 
 import src.db.chroma as _chroma_module
+from scripts.evaluate_search import ServiceExpectation, svc
 from src.embedding.kosimcse import KoSimCSEEmbedder
 from src.models.welfare import SearchRequest, WelfareRaw
 from src.pipeline.index import index_welfare_items
@@ -267,7 +268,13 @@ _SEARCH_CASES = [
 
 # 파라미터 이름을 pytest 예약어 'request'와 충돌하지 않도록 'req'로 사용
 _SEARCH_CASES_PARAMS = [
-    pytest.param(name, req, expected_id, top_k, id=name)
+    pytest.param(
+        name,
+        req,
+        svc(expected_id, "integration search quality must-hit contract", "serv_nm"),
+        top_k,
+        id=name,
+    )
     for name, req, expected_id, top_k in _SEARCH_CASES
 ]
 
@@ -366,20 +373,20 @@ def reset_chroma(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]
 class TestSearchQuality:
     """실제 KoSimCSE 임베딩 + in-memory ChromaDB 로 검색 관련도를 검증한다."""
 
-    @pytest.mark.parametrize("name,req,expected_id,top_k", _SEARCH_CASES_PARAMS)
+    @pytest.mark.parametrize("name,req,expected,top_k", _SEARCH_CASES_PARAMS)
     async def test_search_accuracy(
         self,
         name: str,
         req: SearchRequest,
-        expected_id: str,
+        expected: ServiceExpectation,
         top_k: int,
         embedder: KoSimCSEEmbedder,
     ) -> None:
         await index_welfare_items(_WELFARE_ITEMS, embedder)
         response = await search_welfare(req, embedder)
         result_ids = [r.serv_id for r in response.results]
-        assert expected_id in result_ids[:top_k], (
-            f"[{name}] 기대 서비스 {expected_id}가 top{top_k} 안에 없음. 실제 순위: {result_ids}"
+        assert expected.serv_id in result_ids[:top_k], (
+            f"[{name}] 기대 서비스 {expected.serv_id}가 top{top_k} 안에 없음. 실제 순위: {result_ids}"
         )
 
 

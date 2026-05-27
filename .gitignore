@@ -45,6 +45,7 @@ data/processed/*
 data/chroma/*.sqlite3-wal
 data/chroma/*.sqlite3-shm
 data/chroma/*.sqlite3-journal
+data/chroma-section-aware/
 
 # harness step 실행 결과물 (로컬 전용)
 phases/**/step*-output.json

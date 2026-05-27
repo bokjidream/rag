@@ -6,7 +6,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.models.welfare import SearchRequest, SearchResponse, WelfareDetail
-from src.retriever.search import build_query_text, get_welfare_detail, search_welfare
+from src.retriever.search import (
+    _response_results_from_raw,
+    build_query_text,
+    get_welfare_detail,
+    search_welfare,
+)
 
 
 class TestBuildQueryText:
@@ -228,6 +233,39 @@ class TestSearchWelfare:
         assert mock_collection.query.call_args.kwargs["n_results"] == 20
         assert [result.serv_id for result in response.results] == ["WORK", "GENERAL"]
         assert response.results[0].eligibility_status == "needs_more_info"
+
+    def test_response_results_deduplicates_services_with_section_rerank_enabled(self) -> None:
+        metadata = {
+            "serv_id": "SVC",
+            "serv_nm": "통합 서비스",
+            "serv_dgst": "개요",
+            "jur_mnof_nm": "보건복지부",
+            "trgter_indvdl": json.dumps(["저소득"], ensure_ascii=False),
+            "intrs_thema": json.dumps(["생활지원"], ensure_ascii=False),
+            "tgtr_dtl_cn": "저소득 가구",
+            "slct_crit_cn": "소득 기준",
+            "alw_serv_cn": "생활 지원",
+        }
+        raw = {
+            "distances": [[0.20, 0.18, 0.25]],
+            "metadatas": [
+                [
+                    {**metadata, "chunk_section": "summary"},
+                    {**metadata, "chunk_section": "target"},
+                    {
+                        **metadata,
+                        "serv_id": "OTHER",
+                        "serv_nm": "다른 서비스",
+                        "chunk_section": "target",
+                    },
+                ]
+            ],
+        }
+
+        request = SearchRequest(age=40, income_level="저소득", top_k=5)
+        results = _response_results_from_raw(request, raw, enable_section_rerank=True)
+
+        assert [result.serv_id for result in results] == ["SVC", "OTHER"]
 
 
 class TestGetWelfareDetail:
