@@ -7,6 +7,11 @@ import chromadb
 from chromadb.api import ClientAPI
 
 WELFARE_COLLECTION = "welfare_services"
+VALIDATION_SAMPLE_SIZE = 50
+
+
+class ChromaCollectionValidationError(RuntimeError):
+    """Raised when the API startup collection validation fails."""
 
 _client: ClientAPI | None = None
 _lock: asyncio.Lock | None = None  # 이벤트 루프 실행 중에 생성해야 함 (Python 3.9 호환)
@@ -48,4 +53,53 @@ async def get_collection(name: str) -> chromadb.Collection:
         client.get_or_create_collection,
         name,
         metadata={"hnsw:space": "cosine"},
+    )
+
+
+async def get_existing_collection(name: str) -> chromadb.Collection:
+    """컬렉션 반환. API startup 검증용이며 존재하지 않으면 생성하지 않는다."""
+    client = await get_client()
+    return await asyncio.to_thread(client.get_collection, name)
+
+
+async def validate_existing_collection(
+    name: str,
+    *,
+    require_section_metadata: bool = False,
+) -> None:
+    """Validate that an existing Chroma collection is usable by the API."""
+    try:
+        collection = await get_existing_collection(name)
+    except Exception as exc:
+        raise ChromaCollectionValidationError(
+            f"Chroma collection does not exist or cannot be opened: {name}"
+        ) from exc
+
+    try:
+        count = await asyncio.to_thread(collection.count)
+    except Exception as exc:
+        raise ChromaCollectionValidationError(
+            f"Failed to count Chroma collection: {name}"
+        ) from exc
+
+    if count <= 0:
+        raise ChromaCollectionValidationError(f"Chroma collection is empty: {name}")
+
+    if require_section_metadata and not await _collection_sample_has_chunk_section(collection):
+        raise ChromaCollectionValidationError(
+            f"Chroma collection is missing chunk_section metadata in sampled records: {name}"
+        )
+
+
+async def _collection_sample_has_chunk_section(collection: chromadb.Collection) -> bool:
+    def _get_sample():
+        return collection.get(
+            limit=VALIDATION_SAMPLE_SIZE,
+            include=["metadatas"],
+        )
+
+    raw = await asyncio.to_thread(_get_sample)
+    metadatas = raw.get("metadatas") or []
+    return bool(metadatas) and all(
+        metadata is not None and bool(metadata.get("chunk_section")) for metadata in metadatas
     )
