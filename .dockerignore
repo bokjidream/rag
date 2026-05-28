@@ -1,0 +1,15 @@
+.git
+.venv
+.env
+__pycache__
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.coverage
+*.pyc
+*.pyo
+*.sqlite3-wal
+*.sqlite3-shm
+*.sqlite3-journal
+data/chroma
+data/chroma-section-aware
