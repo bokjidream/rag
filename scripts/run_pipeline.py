@@ -5,6 +5,7 @@ Usage:
     PUBLIC_DATA_API_KEY=<key> python scripts/run_pipeline.py
     CHROMA_MODE=ephemeral PUBLIC_DATA_API_KEY=dummy python scripts/run_pipeline.py  # 스모크 테스트
 """
+
 from __future__ import annotations
 
 import asyncio

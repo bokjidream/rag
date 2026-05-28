@@ -50,9 +50,7 @@ async def client() -> AsyncGenerator[AsyncClient, None]:
 
 
 class TestSearchEndpoint:
-    async def test_valid_request_returns_200_and_search_response(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_valid_request_returns_200_and_search_response(self, client: AsyncClient) -> None:
         with patch(
             "src.api.routes.welfare.search_welfare",
             new_callable=AsyncMock,
@@ -71,6 +69,10 @@ class TestSearchEndpoint:
         assert result["serv_id"] == "WLF00000035"
         assert result["serv_nm"] == "테스트 서비스"
         assert result["score"] == pytest.approx(0.87)
+        assert result["eligibility_status"] == "likely"
+        assert result["eligibility_reasons"] == []
+        assert result["missing_fields"] == []
+        assert result["evidence"] == []
 
     async def test_missing_required_field_returns_422(self, client: AsyncClient) -> None:
         response = await client.post(
@@ -79,9 +81,7 @@ class TestSearchEndpoint:
         )
         assert response.status_code == 422
 
-    async def test_disability_true_without_severity_returns_422(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_disability_true_without_severity_returns_422(self, client: AsyncClient) -> None:
         with patch(
             "src.api.routes.welfare.search_welfare",
             new_callable=AsyncMock,
@@ -98,9 +98,7 @@ class TestSearchEndpoint:
 
         assert response.status_code == 422
 
-    async def test_disability_true_with_severity_returns_200(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_disability_true_with_severity_returns_200(self, client: AsyncClient) -> None:
         with patch(
             "src.api.routes.welfare.search_welfare",
             new_callable=AsyncMock,
@@ -142,9 +140,7 @@ class TestSearchEndpoint:
 
 
 class TestGetDetailEndpoint:
-    async def test_existing_id_returns_200_and_welfare_detail(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_existing_id_returns_200_and_welfare_detail(self, client: AsyncClient) -> None:
         with patch(
             "src.api.routes.welfare.get_welfare_detail",
             new_callable=AsyncMock,
@@ -158,7 +154,9 @@ class TestGetDetailEndpoint:
         assert body["serv_nm"] == "테스트 서비스"
         assert body["tgtr_dtl_cn"] == "수급 대상 상세"
         assert body["required_documents"] == []
-        assert body["application_fields"] == []
+        assert body["application_method"] == ""
+        assert body["application_forms"] == []
+        assert "application_fields" not in body
 
     async def test_nonexistent_id_returns_404(self, client: AsyncClient) -> None:
         with patch(

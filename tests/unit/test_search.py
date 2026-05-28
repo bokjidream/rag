@@ -6,7 +6,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.models.welfare import SearchRequest, SearchResponse, WelfareDetail
-from src.retriever.search import build_query_text, get_welfare_detail, search_welfare
+from src.retriever.rerank import RankedService
+from src.retriever.search import (
+    WELFARE_COLLECTION,
+    _response_results_from_raw,
+    build_query_text,
+    get_welfare_detail,
+    search_welfare,
+)
 
 
 class TestBuildQueryText:
@@ -57,7 +64,9 @@ class TestBuildQueryText:
         assert "자녀" not in result
 
     def test_disability_severity_included(self) -> None:
-        request = SearchRequest(age=40, income_level="저소득", disability=True, disability_severity="경증")
+        request = SearchRequest(
+            age=40, income_level="저소득", disability=True, disability_severity="경증"
+        )
         result = build_query_text(request)
         assert "경증 장애인" in result
 
@@ -168,6 +177,166 @@ class TestSearchWelfare:
 
         assert response.results[0].score == 0.0
 
+    @pytest.mark.asyncio
+    async def test_excludes_unlikely_results_after_fetching_extra_candidates(self) -> None:
+        mock_embedder = MagicMock()
+        mock_embedder.embed.return_value = [[0.1, 0.2, 0.3]]
+
+        mock_query_result = {
+            "ids": [["OLD_chunk_0", "GENERAL_chunk_0", "WORK_chunk_0"]],
+            "distances": [[0.05, 0.2, 0.25]],
+            "metadatas": [
+                [
+                    {
+                        "serv_id": "OLD",
+                        "serv_nm": "독거노인 서비스",
+                        "serv_dgst": "노인 돌봄",
+                        "jur_mnof_nm": "보건복지부",
+                        "trgter_indvdl": json.dumps(["노인"], ensure_ascii=False),
+                        "intrs_thema": json.dumps(["돌봄"], ensure_ascii=False),
+                        "slct_crit_cn": "실제로 혼자 살고있는 만 65세 이상의 노인입니다.",
+                    },
+                    {
+                        "serv_id": "GENERAL",
+                        "serv_nm": "일반 상담",
+                        "serv_dgst": "지역 주민 상담",
+                        "jur_mnof_nm": "보건복지부",
+                        "trgter_indvdl": json.dumps([], ensure_ascii=False),
+                        "intrs_thema": json.dumps(["생활지원"], ensure_ascii=False),
+                    },
+                    {
+                        "serv_id": "WORK",
+                        "serv_nm": "근로 장려",
+                        "serv_dgst": "근로소득 가구 지원",
+                        "jur_mnof_nm": "국세청",
+                        "trgter_indvdl": json.dumps(["저소득"], ensure_ascii=False),
+                        "intrs_thema": json.dumps(["소득지원"], ensure_ascii=False),
+                        "slct_crit_cn": "근로소득 또는 사업소득이 있는 거주자가 신청합니다.",
+                    },
+                ]
+            ],
+        }
+
+        mock_collection = MagicMock()
+        mock_collection.query.return_value = mock_query_result
+
+        with patch("src.retriever.search.get_collection", new_callable=AsyncMock) as mock_get_col:
+            mock_get_col.return_value = mock_collection
+
+            request = SearchRequest(
+                age=61,
+                income_level="저소득",
+                employment_status="비경제활동",
+                top_k=2,
+            )
+            response = await search_welfare(request, mock_embedder)
+
+        mock_collection.query.assert_called_once()
+        assert mock_collection.query.call_args.kwargs["n_results"] == 20
+        assert [result.serv_id for result in response.results] == ["WORK", "GENERAL"]
+        assert response.results[0].eligibility_status == "needs_more_info"
+
+    def test_response_results_deduplicates_services_with_section_rerank_enabled(self) -> None:
+        metadata = {
+            "serv_id": "SVC",
+            "serv_nm": "통합 서비스",
+            "serv_dgst": "개요",
+            "jur_mnof_nm": "보건복지부",
+            "trgter_indvdl": json.dumps(["저소득"], ensure_ascii=False),
+            "intrs_thema": json.dumps(["생활지원"], ensure_ascii=False),
+            "tgtr_dtl_cn": "저소득 가구",
+            "slct_crit_cn": "소득 기준",
+            "alw_serv_cn": "생활 지원",
+        }
+        raw = {
+            "distances": [[0.20, 0.18, 0.25]],
+            "metadatas": [
+                [
+                    {**metadata, "chunk_section": "summary"},
+                    {**metadata, "chunk_section": "target"},
+                    {
+                        **metadata,
+                        "serv_id": "OTHER",
+                        "serv_nm": "다른 서비스",
+                        "chunk_section": "target",
+                    },
+                ]
+            ],
+        }
+
+        request = SearchRequest(age=40, income_level="저소득", top_k=5)
+        results = _response_results_from_raw(request, raw, enable_section_rerank=True)
+
+        assert [result.serv_id for result in results] == ["SVC", "OTHER"]
+
+    @pytest.mark.asyncio
+    async def test_baseline_collection_disables_section_rerank_even_with_section_metadata(
+        self,
+    ) -> None:
+        metadata = {
+            "serv_id": "SVC",
+            "serv_nm": "통합 서비스",
+            "serv_dgst": "개요",
+            "jur_mnof_nm": "보건복지부",
+            "trgter_indvdl": json.dumps([], ensure_ascii=False),
+            "intrs_thema": json.dumps(["생활지원"], ensure_ascii=False),
+            "tgtr_dtl_cn": "지역 주민",
+            "slct_crit_cn": "",
+            "alw_serv_cn": "상담 지원",
+            "chunk_section": "target",
+        }
+        raw = {
+            "ids": [["SVC_chunk_0"]],
+            "distances": [[0.20]],
+            "metadatas": [[metadata]],
+        }
+        mock_collection = MagicMock()
+        mock_collection.query.return_value = raw
+        mock_embedder = MagicMock()
+        mock_embedder.embed.return_value = [[0.1, 0.2, 0.3]]
+        section_flags: list[bool] = []
+
+        def _capture_rank(
+            request: SearchRequest,
+            intent: object,
+            candidates: list[tuple[dict[str, str], float]],
+            *,
+            enable_section_rerank: bool,
+        ) -> RankedService:
+            section_flags.append(enable_section_rerank)
+            candidate_metadata, distance = candidates[0]
+            return RankedService(
+                metadata=candidate_metadata,
+                distance=distance,
+                score=0.80,
+                raw_score=0.80,
+                profile_boost=0.0,
+            )
+
+        with (
+            patch(
+                "src.retriever.search.get_collection",
+                new_callable=AsyncMock,
+            ) as mock_get_col,
+            patch(
+                "src.retriever.search._rerank.rank_service_candidates",
+                side_effect=_capture_rank,
+            ),
+        ):
+            mock_get_col.return_value = mock_collection
+            await search_welfare(
+                SearchRequest(age=30, income_level="일반", top_k=1),
+                mock_embedder,
+                collection_name=WELFARE_COLLECTION,
+            )
+            await search_welfare(
+                SearchRequest(age=30, income_level="일반", top_k=1),
+                mock_embedder,
+                collection_name="welfare_services_section_aware",
+            )
+
+        assert section_flags == [False, True]
+
 
 class TestGetWelfareDetail:
     @pytest.mark.asyncio
@@ -204,7 +373,8 @@ class TestGetWelfareDetail:
         assert result.intrs_thema == ["주거"]
         assert result.application_url == "https://example.com"
         assert result.required_documents == []
-        assert result.application_fields == []
+        assert result.application_method == ""
+        assert result.application_forms == []
 
     @pytest.mark.asyncio
     async def test_returns_none_when_not_found(self) -> None:
