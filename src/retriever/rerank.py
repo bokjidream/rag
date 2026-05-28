@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 
 from src.models.welfare import SearchRequest
@@ -54,6 +54,140 @@ _VETERAN_TERMS = ("보훈", "국가유공", "독립유공", "참전유공", "보
 _AGRICULTURE_TERMS = ("농업인", "어업인", "농어업", "농촌", "어촌", "축산업", "임업")
 _MULTICULTURAL_TERMS = ("다문화", "결혼이민")
 _NORTH_KOREAN_DEFECTOR_TERMS = ("북한이탈", "탈북민")
+_THEME_METADATA_FIELDS = (
+    "serv_nm",
+    "serv_dgst",
+    "tgtr_dtl_cn",
+    "slct_crit_cn",
+    "alw_serv_cn",
+)
+_CHILD_CARE_BOOST_TERMS = (
+    "가정양육수당",
+    "영유아보육료",
+    "보육료",
+    "유아학비",
+    "아동수당",
+    "아이돌봄",
+    "다함께 돌봄",
+    "다함께돌봄",
+    "예방접종",
+    "영유아 건강검진",
+    "영유아건강검진",
+    "시간제보육",
+    "육아종합지원",
+)
+_CHILD_CARE_PENALTY_TERMS = (
+    "청소년부모",
+    "자립준비청년",
+    "보호종료아동",
+    "입양",
+    "위탁",
+)
+_CHILD_SUPPORT_TERMS = ("한부모", "양육비")
+_MATERNITY_BOOST_TERMS = (
+    "표준모자보건수첩",
+    "산모·신생아",
+    "산모 신생아",
+    "임신",
+    "출산",
+    "진료비",
+    "해산급여",
+    "해산비",
+    "영양플러스",
+    "기저귀",
+    "조제분유",
+    "모자보건",
+)
+_MATERNITY_MISMATCH_TERMS = (
+    "전세임대",
+    "매입임대",
+    "한부모가족복지시설",
+    "온가족보듬",
+    "아동통합서비스",
+    "방과후보육료",
+)
+_STARTUP_STRONG_TERMS = ("창업", "점포", "기업", "융자", "자립자금", "인턴")
+_STARTUP_WEAK_TERMS = ("고용",)
+_STARTUP_GENERIC_DISABILITY_TERMS = (
+    "장애수당",
+    "장애인연금",
+    "전세임대",
+    "매입임대",
+    "장애인일자리",
+    "장애인활동지원",
+    "장애인보조기기",
+    "평생교육이용권",
+    "출퇴근비용",
+)
+_LOW_INCOME_THEME_TERMS: dict[str, tuple[str, ...]] = {
+    "culture": (
+        "문화",
+        "스포츠",
+        "여가",
+        "바우처",
+        "이용권",
+        "통합문화이용권",
+        "강좌",
+        "예술",
+    ),
+    "medical": (
+        "의료급여",
+        "의료비",
+        "건강검진",
+        "질환",
+        "치료비",
+        "검진",
+        "예방접종",
+    ),
+    "finance": (
+        "서민금융",
+        "학자금",
+        "대출",
+        "신용",
+        "부채",
+        "자산형성",
+        "저축계좌",
+    ),
+    "care": (
+        "돌봄",
+        "안부",
+        "안전",
+        "방문",
+        "재가",
+        "간병",
+        "다함께돌봄",
+        "아이돌봄",
+    ),
+    "housing": (
+        "주거",
+        "주거급여",
+        "전세",
+        "월세",
+        "임대",
+        "주택",
+        "주거비",
+    ),
+    "basic-living": (
+        "생계",
+        "생활지원",
+        "양곡",
+        "감면",
+        "긴급복지",
+        "에너지",
+        "교육급여",
+        "자활",
+        "가사·간병",
+        "가사 간병",
+    ),
+}
+_BROAD_SERVICE_TERMS = (
+    "통합사례관리",
+    "아동통합서비스",
+    "온가족보듬",
+    "지역사회서비스 투자사업",
+)
+_BROAD_HOUSING_TERMS = ("주거급여", "전세임대", "매입임대", "행복주택", "월세")
+_BROAD_EMPLOYMENT_TERMS = ("국민취업지원", "고용", "취업", "일자리", "직업훈련")
 
 
 @dataclass(frozen=True)
@@ -66,6 +200,7 @@ class RankedService:
     section_scores: dict[str, float] = field(default_factory=dict)
     section_weighted_score: float = 0.0
     section_evidence_boost: float = 0.0
+    theme_adjustment: float = 0.0
     negative_penalty: float = 0.0
     reasons: tuple[str, ...] = ()
 
@@ -98,6 +233,7 @@ def rank_service_candidates(
     if not enable_section_rerank or not _has_section_chunks(chunk_scores):
         return _rank_by_best_chunk(chunk_scores)
 
+    service_metadata = _service_level_metadata(candidates)
     section_best = _best_by_section(chunk_scores)
     section_scores = {section: chunk.score for section, chunk in section_best.items()}
     adjusted_scores = {
@@ -109,8 +245,13 @@ def rank_service_candidates(
     best_chunk = section_best[best_section]
     evidence_boost = _primary_section_boost(section_scores)
     penalty, reasons = negative_condition_penalty(intent, best_chunk.metadata)
+    theme_adjustment, theme_reasons = intent_theme_adjustment(intent, service_metadata)
     final_score = _clamp_score(
-        (best_adjusted_score * 0.72) + (weighted_score * 0.28) + evidence_boost - penalty
+        (best_adjusted_score * 0.72)
+        + (weighted_score * 0.28)
+        + evidence_boost
+        + theme_adjustment
+        - penalty
     )
 
     return RankedService(
@@ -122,8 +263,9 @@ def rank_service_candidates(
         section_scores=section_scores,
         section_weighted_score=weighted_score,
         section_evidence_boost=evidence_boost,
+        theme_adjustment=theme_adjustment,
         negative_penalty=penalty,
-        reasons=reasons,
+        reasons=(*reasons, *theme_reasons),
     )
 
 
@@ -204,6 +346,207 @@ def negative_condition_penalty(
     return min(0.28, penalty), tuple(reasons)
 
 
+def intent_theme_adjustment(
+    intent: QueryIntent,
+    metadata: Mapping[str, object],
+) -> tuple[float, tuple[str, ...]]:
+    """Apply small query-theme nudges for section-aware reranking only."""
+    theme = intent.intent_theme or ""
+    if theme.startswith("guardrail:"):
+        return 0.0, ()
+
+    _, _, text = _metadata_terms(metadata)
+    service_text = _service_theme_text(metadata)
+    query_text = intent.query_text or ""
+    adjustment = 0.0
+    reasons: list[str] = []
+
+    child_adjustment, child_reasons = _child_theme_adjustment(intent, service_text, query_text)
+    adjustment += child_adjustment
+    reasons.extend(child_reasons)
+
+    maternity_adjustment, maternity_reasons = _maternity_theme_adjustment(
+        intent,
+        service_text,
+    )
+    adjustment += maternity_adjustment
+    reasons.extend(maternity_reasons)
+
+    startup_adjustment, startup_reasons = _startup_theme_adjustment(theme, service_text)
+    adjustment += startup_adjustment
+    reasons.extend(startup_reasons)
+
+    low_income_adjustment, low_income_reasons = _low_income_theme_adjustment(
+        intent,
+        service_text,
+        text,
+    )
+    adjustment += low_income_adjustment
+    reasons.extend(low_income_reasons)
+
+    return _clamp_theme_adjustment(adjustment), tuple(reasons)
+
+
+def _child_theme_adjustment(
+    intent: QueryIntent,
+    service_text: str,
+    query_text: str,
+) -> tuple[float, tuple[str, ...]]:
+    theme = intent.intent_theme or ""
+    if not (
+        intent.age_group == "child"
+        or "영유아" in query_text
+        or ("아동" in query_text and theme != "child-support")
+    ):
+        return 0.0, ()
+
+    adjustment = 0.0
+    reasons: list[str] = []
+    boost = _term_boost(service_text, _CHILD_CARE_BOOST_TERMS, base=0.035, per=0.012, cap=0.08)
+    if boost > 0:
+        adjustment += boost
+        reasons.append("theme:child_boost")
+
+    penalty_terms = _CHILD_CARE_PENALTY_TERMS
+    if theme != "child-support":
+        penalty_terms = (*penalty_terms, *_CHILD_SUPPORT_TERMS)
+    penalty = _term_penalty(service_text, penalty_terms, base=0.035, per=0.012, cap=0.075)
+    if penalty > 0:
+        adjustment -= penalty
+        reasons.append("theme:child_penalty")
+
+    if (
+        intent.age_group == "child"
+        and _contains_any(service_text, ("청소년",))
+        and not _contains_any(
+            service_text,
+            ("아동", "영유아", "초등", "보육", "아동수당"),
+        )
+    ):
+        adjustment -= 0.03
+        reasons.append("theme:child_age_penalty")
+
+    return adjustment, tuple(reasons)
+
+
+def _maternity_theme_adjustment(
+    intent: QueryIntent,
+    service_text: str,
+) -> tuple[float, tuple[str, ...]]:
+    theme = intent.intent_theme or ""
+    if not (intent.has_pregnancy or theme.startswith("maternity")):
+        return 0.0, ()
+
+    adjustment = 0.0
+    reasons: list[str] = []
+    boost = _term_boost(service_text, _MATERNITY_BOOST_TERMS, base=0.035, per=0.012, cap=0.085)
+    if boost > 0:
+        adjustment += boost
+        reasons.append("theme:maternity_boost")
+
+    penalty = _term_penalty(
+        service_text,
+        _MATERNITY_MISMATCH_TERMS,
+        base=0.055,
+        per=0.012,
+        cap=0.09,
+    )
+    if penalty > 0:
+        adjustment -= penalty
+        reasons.append("theme:maternity_penalty")
+
+    return adjustment, tuple(reasons)
+
+
+def _startup_theme_adjustment(
+    theme: str,
+    service_text: str,
+) -> tuple[float, tuple[str, ...]]:
+    if theme != "startup":
+        return 0.0, ()
+
+    adjustment = 0.0
+    reasons: list[str] = []
+    strong_boost = _term_boost(
+        service_text, _STARTUP_STRONG_TERMS, base=0.045, per=0.014, cap=0.085
+    )
+    if strong_boost > 0:
+        adjustment += strong_boost
+        if _contains_any(service_text, _STARTUP_WEAK_TERMS):
+            adjustment += 0.01
+        reasons.append("theme:startup_boost")
+
+    if strong_boost == 0 and _contains_any(service_text, _STARTUP_GENERIC_DISABILITY_TERMS):
+        adjustment -= 0.07
+        reasons.append("theme:startup_generic_penalty")
+    elif _contains_any(service_text, ("장애수당", "장애인연금", "전세임대", "매입임대")):
+        adjustment -= 0.04
+        reasons.append("theme:startup_weak_penalty")
+
+    return adjustment, tuple(reasons)
+
+
+def _low_income_theme_adjustment(
+    intent: QueryIntent,
+    service_text: str,
+    metadata_text: str,
+) -> tuple[float, tuple[str, ...]]:
+    theme = intent.intent_theme or ""
+    terms = _LOW_INCOME_THEME_TERMS.get(theme)
+    if terms is None:
+        return 0.0, ()
+
+    adjustment = 0.0
+    reasons: list[str] = []
+    boost = _term_boost(service_text, terms, base=0.03, per=0.01, cap=0.075)
+    if boost > 0:
+        adjustment += boost
+        reasons.append(f"theme:{theme}_boost")
+
+    has_target_terms = boost > 0 or _contains_any(metadata_text, terms)
+    mismatch_penalty = 0.0
+    if not has_target_terms:
+        other_terms = tuple(
+            term
+            for other_theme, other_theme_terms in _LOW_INCOME_THEME_TERMS.items()
+            if other_theme != theme
+            for term in other_theme_terms
+        )
+        mismatch_penalty += _term_penalty(service_text, other_terms, base=0.02, per=0.006, cap=0.04)
+
+    if theme not in {"housing", "basic-living"} and not has_target_terms:
+        mismatch_penalty += _term_penalty(
+            service_text,
+            _BROAD_HOUSING_TERMS,
+            base=0.025,
+            per=0.006,
+            cap=0.045,
+        )
+    if theme != "employment" and not has_target_terms:
+        mismatch_penalty += _term_penalty(
+            service_text,
+            _BROAD_EMPLOYMENT_TERMS,
+            base=0.02,
+            per=0.004,
+            cap=0.035,
+        )
+    if not has_target_terms:
+        mismatch_penalty += _term_penalty(
+            service_text,
+            _BROAD_SERVICE_TERMS,
+            base=0.02,
+            per=0.005,
+            cap=0.035,
+        )
+
+    mismatch_penalty = min(0.065, mismatch_penalty)
+    if mismatch_penalty > 0:
+        adjustment -= mismatch_penalty
+        reasons.append(f"theme:{theme}_mismatch_penalty")
+
+    return adjustment, tuple(reasons)
+
+
 def _score_chunk(
     request: SearchRequest,
     metadata: dict[str, str],
@@ -265,15 +608,37 @@ def _weighted_section_score(section_scores: Mapping[str, float]) -> float:
 
 def _primary_section_boost(section_scores: Mapping[str, float]) -> float:
     matched_primary_sections = [
-        section
-        for section in PRIMARY_SECTIONS
-        if section_scores.get(section, 0.0) >= 0.55
+        section for section in PRIMARY_SECTIONS if section_scores.get(section, 0.0) >= 0.55
     ]
     return min(MAX_PRIMARY_SECTION_BOOST, len(matched_primary_sections) * PRIMARY_SECTION_BOOST)
 
 
 def _clamp_score(score: float) -> float:
     return min(1.0, max(0.0, score))
+
+
+def _clamp_theme_adjustment(adjustment: float) -> float:
+    return min(0.10, max(-0.11, adjustment))
+
+
+def _service_level_metadata(
+    candidates: Sequence[tuple[dict[str, str], float]],
+) -> dict[str, str]:
+    merged = dict(candidates[0][0])
+    for metadata_field in _THEME_METADATA_FIELDS:
+        values = [
+            str(metadata.get(metadata_field, "")).strip()
+            for metadata, _ in candidates
+            if str(metadata.get(metadata_field, "")).strip()
+        ]
+        if values:
+            merged[metadata_field] = " ".join(dict.fromkeys(values))
+
+    for metadata_field in ("trgter_indvdl", "intrs_thema"):
+        merged[metadata_field] = _json_str_list_as_metadata(
+            metadata.get(metadata_field, "") for metadata, _ in candidates
+        )
+    return merged
 
 
 def _metadata_terms(metadata: Mapping[str, object]) -> tuple[list[str], list[str], str]:
@@ -292,8 +657,22 @@ def _metadata_terms(metadata: Mapping[str, object]) -> tuple[list[str], list[str
     return targets, themes, text
 
 
+def _service_theme_text(metadata: Mapping[str, object]) -> str:
+    targets, themes, text = _metadata_terms(metadata)
+    return " ".join((*targets, *themes, text))
+
+
 def _service_text(metadata: Mapping[str, object]) -> str:
     return " ".join(str(metadata.get(field, "")) for field in ("serv_nm", "serv_dgst"))
+
+
+def _json_str_list_as_metadata(values: Iterable[object]) -> str:
+    unique: list[str] = []
+    for value in values:
+        for item in _json_str_list(value):
+            if item not in unique:
+                unique.append(item)
+    return json.dumps(unique, ensure_ascii=False)
 
 
 def _json_str_list(value: object) -> list[str]:
@@ -371,6 +750,38 @@ def _profile_boost(request: SearchRequest, metadata: Mapping[str, object]) -> fl
 def _rank_score(request: SearchRequest, metadata: Mapping[str, object], distance: float) -> float:
     base_score = max(0.0, 1.0 - distance)
     return _clamp_score(base_score + _profile_boost(request, metadata))
+
+
+def _term_boost(
+    text: str,
+    terms: tuple[str, ...],
+    *,
+    base: float,
+    per: float,
+    cap: float,
+) -> float:
+    matches = _count_term_matches(text, terms)
+    if matches == 0:
+        return 0.0
+    return min(cap, base + ((matches - 1) * per))
+
+
+def _term_penalty(
+    text: str,
+    terms: tuple[str, ...],
+    *,
+    base: float,
+    per: float,
+    cap: float,
+) -> float:
+    matches = _count_term_matches(text, terms)
+    if matches == 0:
+        return 0.0
+    return min(cap, base + ((matches - 1) * per))
+
+
+def _count_term_matches(text: str, terms: tuple[str, ...]) -> int:
+    return sum(1 for term in terms if term in text)
 
 
 def _is_senior_dedicated(target_set: set[str], service_text: str, text: str) -> bool:
