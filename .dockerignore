@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+bokjidream_rag.egg-info/
+tests/
+docs/
+scripts/
+.git/
+.env
+*.env
