@@ -1,0 +1,13 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${API_PORT:-8000}:8000"
+    environment:
+      CHROMA_MODE: persistent
+      CHROMA_PERSIST_DIR: /app/data/chroma-section-aware
+      WELFARE_COLLECTION_NAME: welfare_services_section_aware
+    volumes:
+      - ${CHROMA_HOST_DIR:-./data/chroma-section-aware}:/app/data/chroma-section-aware

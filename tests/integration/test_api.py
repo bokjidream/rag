@@ -6,7 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from src.api.deps import get_embedder
+from src.api.config import ApiConfig
+from src.api.deps import get_api_config, get_embedder
 from src.api.main import app
 from src.models.welfare import SearchResponse, SearchResult, WelfareDetail
 
@@ -44,6 +45,10 @@ async def client() -> AsyncGenerator[AsyncClient, None]:
     # ASGITransport은 lifespan을 트리거하지 않으므로 dependency_overrides로 embedder 주입
     mock_embedder = MagicMock()
     app.dependency_overrides[get_embedder] = lambda: mock_embedder
+    app.dependency_overrides[get_api_config] = lambda: ApiConfig(
+        collection_name="welfare_services",
+        adaptive_fetch=False,
+    )
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
     app.dependency_overrides.clear()

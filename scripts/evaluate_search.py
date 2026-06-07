@@ -4170,7 +4170,12 @@ async def _diagnose_case(
     for raw_rank, (meta, dist) in enumerate(zip(metadatas, distances), start=1):
         raw_by_serv_id.setdefault(meta["serv_id"], []).append((raw_rank, meta, dist))
 
-    intent = build_query_intent(case.request)
+    intent = build_query_intent(
+        case.request,
+        query_text=query_text,
+        intent_theme=_infer_intent_theme(case),
+    )
+    enable_section_rerank = collection_name != WELFARE_COLLECTION
     ranked = sorted(
         (
             (
@@ -4179,7 +4184,7 @@ async def _diagnose_case(
                     case.request,
                     intent,
                     [(meta, dist) for _, meta, dist in chunks],
-                    enable_section_rerank=adaptive_fetch,
+                    enable_section_rerank=enable_section_rerank,
                 ),
             )
             for chunks in raw_by_serv_id.values()
@@ -4192,7 +4197,7 @@ async def _diagnose_case(
     print(f"\nDIAGNOSE {case.name}  query={query_text}")
     print(
         f"  {'#':>3}  {'raw':>4}  {'dist':>6}  {'raw_score':>9}  {'boost':>6}  "
-        f"{'weighted':>8}  {'ev':>5}  {'pen':>5}  {'final':>6}  "
+        f"{'weighted':>8}  {'ev':>5}  {'theme':>6}  {'pen':>5}  {'final':>6}  "
         f"{'sections':<28}  serv_id          serv_nm"
     )
     for final_rank, (raw_rank, service) in enumerate(
@@ -4208,6 +4213,7 @@ async def _diagnose_case(
             f"boost={service.profile_boost:+.3f}  "
             f"weighted={service.section_weighted_score:.3f}  "
             f"ev={service.section_evidence_boost:+.3f}  "
+            f"theme={service.theme_adjustment:+.3f}  "
             f"pen={service.negative_penalty:.3f}  "
             f"final={service.score:.3f}  {section_text:<28}  "
             f"{service.metadata['serv_id']}  {service.metadata['serv_nm'][:28]}  {reason_text}"
@@ -4739,11 +4745,16 @@ async def _search_eval_case(
 
     while True:
         raw = await _query_collection(collection, vec, n_results)
+        intent = build_query_intent(
+            case.request,
+            query_text=query_text,
+            intent_theme=_infer_intent_theme(case),
+        )
         search_results = _response_results_from_raw(
             case.request,
             raw,
             enable_section_rerank=collection_name != WELFARE_COLLECTION,
-            intent=build_query_intent(case.request),
+            intent=intent,
         )
         if (
             not adaptive_fetch

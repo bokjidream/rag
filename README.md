@@ -12,3 +12,8 @@ prebuilt welfare-service embeddings.
   table, treat it as a local artifact and restore it before committing.
 - SQLite runtime sidecar files (`*.sqlite3-wal`, `*.sqlite3-shm`,
   `*.sqlite3-journal`) are ignored.
+
+## Docker
+
+See [docs/docker.md](docs/docker.md) for Docker Compose deployment, section-aware
+collection configuration, and smoke-test commands.
