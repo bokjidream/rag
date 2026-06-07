@@ -17,9 +17,16 @@ class QueryIntent:
     has_children: bool | None
     negative_flags: frozenset[str]
     unknown_flags: frozenset[str]
+    intent_theme: str | None = None
+    query_text: str | None = None
 
 
-def build_query_intent(request: SearchRequest) -> QueryIntent:
+def build_query_intent(
+    request: SearchRequest,
+    *,
+    query_text: str | None = None,
+    intent_theme: str | None = None,
+) -> QueryIntent:
     """SearchRequest를 reranking rule 입력으로 정규화한다."""
     negative_flags: set[str] = set()
     unknown_flags: set[str] = {
@@ -48,6 +55,8 @@ def build_query_intent(request: SearchRequest) -> QueryIntent:
         has_children=request.has_children,
         negative_flags=frozenset(negative_flags),
         unknown_flags=frozenset(unknown_flags),
+        intent_theme=intent_theme,
+        query_text=query_text,
     )
 
 
