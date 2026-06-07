@@ -11,5 +11,4 @@ __pycache__
 *.sqlite3-wal
 *.sqlite3-shm
 *.sqlite3-journal
-data/chroma
-data/chroma-section-aware
+# data/chroma intentionally included for Railway deployment
