@@ -14,6 +14,7 @@ RUN apt-get update \
 
 COPY pyproject.toml README.md ./
 COPY src ./src
+COPY data ./data
 
 ARG TORCH_VERSION=2.8.0+cpu
 RUN pip install --upgrade pip \
@@ -27,4 +28,4 @@ RUN if [ "$PRELOAD_EMBEDDING_MODEL" = "true" ]; then \
 
 EXPOSE 8000
 
-CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "uvicorn src.api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
